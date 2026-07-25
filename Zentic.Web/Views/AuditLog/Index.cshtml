@@ -1,0 +1,124 @@
+@model Zentic.Application.DTOs.PaginatedResult<Zentic.Application.DTOs.AuditLogDto>
+@{
+    ViewData["Title"] = "Audit Trail";
+    var filter = ViewBag.Filter as Zentic.Application.DTOs.AuditFilterDto;
+}
+<div class="d-flex justify-content-between align-items-center mb-4 page-header-row">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-shield-check me-2 text-primary"></i>Audit Trail</h4>
+        <p class="text-muted small mb-0">Log semua aktivitas dan perubahan di sistem</p>
+    </div>
+</div>
+
+<!-- Filter -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end filter-form">
+            <div class="col-12 col-md-3">
+                <label class="form-label small fw-semibold mb-1">Entity</label>
+                <select name="entityName" class="form-select form-select-sm">
+                    <option value="">All Entities</option>
+                    <option value="ExpenseRequisition" selected="@(filter?.EntityName == "ExpenseRequisition")">Expense Requisition</option>
+                    <option value="AppUser" selected="@(filter?.EntityName == "AppUser")">User</option>
+                    <option value="Vendor" selected="@(filter?.EntityName == "Vendor")">Vendor</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">From Date</label>
+                <input type="date" name="from" class="form-control form-control-sm" value="@(filter?.From?.ToString("yyyy-MM-dd"))" />
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small fw-semibold mb-1">To Date</label>
+                <input type="date" name="to" class="form-control form-control-sm" value="@(filter?.To?.ToString("yyyy-MM-dd"))" />
+            </div>
+            <div class="col-12 col-md-3">
+                <button type="submit" class="btn btn-primary btn-sm w-100">
+                    <i class="bi bi-funnel me-1"></i>Filter
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header">
+        <span class="fw-semibold">Audit Logs <span class="badge bg-primary ms-1">@Model.TotalCount</span></span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Actor</th>
+                        <th>Event</th>
+                        <th class="table-mobile-hide">Entity</th>
+                        <th class="table-mobile-hide">Entity ID</th>
+                        <th class="table-mobile-hide">IP Address</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Items.Any())
+                    {
+                        <tr><td colspan="7" class="text-center text-muted py-4">No audit logs found.</td></tr>
+                    }
+                    @foreach (var log in Model.Items)
+                    {
+                        <tr>
+                            <td class="text-muted small" style="white-space:nowrap;">@log.Timestamp.ToString("dd MMM HH:mm")</td>
+                            <td class="fw-semibold small">@log.ActorName</td>
+                            <td>
+                                @{
+                                    var evtColor = log.EventType switch {
+                                        "Create" => "success",
+                                        "Approve" => "primary",
+                                        "Reject" => "danger",
+                                        "Delete" => "danger",
+                                        "Login" => "info",
+                                        "StatusChange" => "warning",
+                                        _ => "secondary"
+                                    };
+                                }
+                                <span class="badge bg-@(evtColor)-subtle text-@evtColor border border-@(evtColor)-subtle">@log.EventType</span>
+                            </td>
+                            <td class="small table-mobile-hide">@log.EntityName</td>
+                            <td class="text-muted small table-mobile-hide">@log.EntityId</td>
+                            <td class="text-muted small table-mobile-hide">@(log.IpAddress ?? "-")</td>
+                            <td class="text-muted small" style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">@(log.Notes ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+    @if (Model.TotalPages > 1)
+    {
+        <div class="card-footer d-flex justify-content-between align-items-center">
+            <span class="text-muted small">Showing @((Model.Page - 1) * Model.PageSize + 1)–@(Math.Min(Model.Page * Model.PageSize, Model.TotalCount)) of @Model.TotalCount</span>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item @(!Model.HasPreviousPage ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-page="@(Model.Page - 1)"
+                           asp-route-entityName="@filter?.EntityName" asp-route-from="@filter?.From?.ToString("yyyy-MM-dd")" asp-route-to="@filter?.To?.ToString("yyyy-MM-dd")">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    @for (int p = Math.Max(1, Model.Page - 2); p <= Math.Min(Model.TotalPages, Model.Page + 2); p++)
+                    {
+                        <li class="page-item @(p == Model.Page ? "active" : "")">
+                            <a class="page-link" asp-action="Index" asp-route-page="@p"
+                               asp-route-entityName="@filter?.EntityName" asp-route-from="@filter?.From?.ToString("yyyy-MM-dd")" asp-route-to="@filter?.To?.ToString("yyyy-MM-dd")">@p</a>
+                        </li>
+                    }
+                    <li class="page-item @(!Model.HasNextPage ? "disabled" : "")">
+                        <a class="page-link" asp-action="Index" asp-route-page="@(Model.Page + 1)"
+                           asp-route-entityName="@filter?.EntityName" asp-route-from="@filter?.From?.ToString("yyyy-MM-dd")" asp-route-to="@filter?.To?.ToString("yyyy-MM-dd")">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    }
+</div>

@@ -1,0 +1,11 @@
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\bin\Debug\net10.0\Zentic.Domain.deps.json
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\bin\Debug\net10.0\Zentic.Domain.dll
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\bin\Debug\net10.0\Zentic.Domain.pdb
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\obj\Debug\net10.0\Zentic.Domain.GeneratedMSBuildEditorConfig.editorconfig
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\obj\Debug\net10.0\Zentic.Domain.AssemblyInfoInputs.cache
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\obj\Debug\net10.0\Zentic.Domain.AssemblyInfo.cs
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\obj\Debug\net10.0\Zentic.Domain.csproj.CoreCompileInputs.cache
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\obj\Debug\net10.0\Zentic.Domain.dll
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\obj\Debug\net10.0\refint\Zentic.Domain.dll
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\obj\Debug\net10.0\Zentic.Domain.pdb
+D:\project asp.net\ZenticEnterprise\Zentic.Domain\obj\Debug\net10.0\ref\Zentic.Domain.dll

@@ -1,0 +1,81 @@
+@model Zentic.Application.DTOs.CreateVendorDto
+@{
+    ViewData["Title"] = "Create Vendor";
+}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-shop me-2 text-primary"></i>Create Vendor</h4>
+        <p class="text-muted small mb-0">Daftarkan vendor baru — status awal: Pending Verification</p>
+    </div>
+    <a asp-action="Index" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="card border-0 shadow-sm" style="max-width:640px;">
+    <div class="card-body p-4">
+        <form asp-action="Create" method="post">
+            @Html.AntiForgeryToken()
+
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div class="alert alert-danger">
+                    <ul class="mb-0">
+                        @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                        {
+                            <li>@error.ErrorMessage</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            <h6 class="fw-semibold text-muted mb-3 text-uppercase" style="font-size:0.75rem;letter-spacing:.08em;">Vendor Info</h6>
+            <div class="row g-3 mb-3">
+                <div class="col-sm-8">
+                    <label class="form-label fw-semibold">Vendor Name <span class="text-danger">*</span></label>
+                    <input asp-for="Name" class="form-control" required />
+                </div>
+                <div class="col-sm-4">
+                    <label class="form-label fw-semibold">Code <span class="text-danger">*</span></label>
+                    <input asp-for="Code" class="form-control text-uppercase" required maxlength="20" placeholder="e.g. VND001" />
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Address</label>
+                <textarea asp-for="Address" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Phone</label>
+                    <input asp-for="PhoneNumber" class="form-control" />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Email</label>
+                    <input asp-for="Email" type="email" class="form-control" />
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Tax ID (NPWP)</label>
+                <input asp-for="TaxId" class="form-control" placeholder="00.000.000.0-000.000" />
+            </div>
+
+            <h6 class="fw-semibold text-muted mb-3 text-uppercase" style="font-size:0.75rem;letter-spacing:.08em;">Bank Account</h6>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Bank Name</label>
+                <input asp-for="BankName" class="form-control" placeholder="e.g. BCA, Mandiri, BNI" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Account Holder Name</label>
+                <input asp-for="BankAccountHolderName" class="form-control" />
+            </div>
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Account Number</label>
+                <input asp-for="BankAccountNumber" class="form-control" placeholder="Will be stored encrypted" />
+                <div class="form-text"><i class="bi bi-shield-lock me-1"></i>Stored with AES-256 encryption at rest.</div>
+            </div>
+
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Register Vendor</button>
+                <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

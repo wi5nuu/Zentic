@@ -1,0 +1,105 @@
+@model List<Zentic.Application.DTOs.VendorDto>
+@{
+    ViewData["Title"] = "Vendor Management";
+}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-shop me-2 text-primary"></i>Vendor Management</h4>
+        <p class="text-muted small mb-0">Daftar semua vendor yang terdaftar di sistem</p>
+    </div>
+    <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Add Vendor</a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2 card-header-flex">
+        <span class="fw-semibold">All Vendors <span class="badge bg-primary ms-1">@Model.Count</span></span>
+        <input type="text" id="vendorSearch" class="form-control form-control-sm" placeholder="Search vendor..." style="max-width:240px;" />
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="vendorTable">
+                <thead>
+                    <tr>
+                        <th class="table-mobile-hide">#</th>
+                        <th>Vendor Name</th>
+                        <th class="table-mobile-hide">Code</th>
+                        <th class="table-mobile-hide">Account</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr><td colspan="6" class="text-center text-muted py-4">No vendors found.</td></tr>
+                    }
+                    @foreach (var item in Model.Select((v, i) => new { v, i = i + 1 }))
+                    {
+                        var v = item.v;
+                        var statusClass = v.Status == "Active"
+                            ? "badge bg-success-subtle text-success border border-success-subtle"
+                            : v.Status == "PendingVerification"
+                                ? "badge bg-warning-subtle text-warning border border-warning-subtle"
+                                : v.Status == "Suspended"
+                                    ? "badge bg-danger-subtle text-danger border border-danger-subtle"
+                                    : "badge bg-secondary-subtle text-secondary border";
+                        <tr>
+                            <td class="text-muted table-mobile-hide">@item.i</td>
+                            <td>
+                                <div class="fw-semibold">@v.Name</div>
+                                <div class="text-muted small d-md-none">@v.Code &middot; @(v.MaskedAccountNumber ?? "-")</div>
+                            </td>
+                            <td class="table-mobile-hide"><span class="badge bg-light text-dark border">@v.Code</span></td>
+                            <td class="text-muted small table-mobile-hide">@(v.MaskedAccountNumber ?? "-")</td>
+                            <td><span class="@statusClass">@v.Status</span></td>
+                            <td>
+                                <div class="d-flex gap-1 flex-wrap">
+                                    <a asp-action="Details" asp-route-id="@v.Id" class="btn btn-sm btn-outline-primary" title="Details">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a asp-action="Edit" asp-route-id="@v.Id" class="btn btn-sm btn-outline-secondary" title="Edit">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    @if (v.Status == "PendingVerification")
+                                    {
+                                        <form asp-action="Verify" asp-route-id="@v.Id" method="post" class="d-inline"
+                                              onsubmit="return confirm('Verify this vendor and set to Active?')">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm btn-outline-success" title="Verify">
+                                                <i class="bi bi-check-circle"></i>
+                                            </button>
+                                        </form>
+                                    }
+                                    @if (v.Status == "Active" || v.Status == "Suspended")
+                                    {
+                                        var suspendLabel = v.Status == "Active" ? "Suspend this vendor?" : "Re-activate this vendor?";
+                                        var suspendIcon  = v.Status == "Active" ? "pause-circle" : "play-circle";
+                                        var suspendBtn   = v.Status == "Active" ? "btn-outline-warning" : "btn-outline-success";
+                                        <form asp-action="Suspend" asp-route-id="@v.Id" method="post" class="d-inline"
+                                              onsubmit="return confirm('@suspendLabel')">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm @suspendBtn" title="@suspendLabel">
+                                                <i class="bi bi-@suspendIcon"></i>
+                                            </button>
+                                        </form>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+document.getElementById('vendorSearch').addEventListener('input', function () {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('#vendorTable tbody tr').forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+});
+</script>
+}

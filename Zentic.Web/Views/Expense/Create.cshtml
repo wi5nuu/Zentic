@@ -1,0 +1,101 @@
+@model Zentic.Application.DTOs.CreateExpenseDto
+@{
+    ViewData["Title"] = "New Expense Requisition";
+}
+<div class="mb-4">
+    <a asp-action="Index" class="text-decoration-none text-muted small"><i class="bi bi-arrow-left me-1"></i>Back to list</a>
+    <h4 class="fw-bold mt-1 mb-0">New Expense Requisition</h4>
+</div>
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
+                <form asp-action="Create" method="post">
+                    @Html.AntiForgeryToken()
+                    @if (!ViewData.ModelState.IsValid && ViewData.ModelState.ErrorCount > 0)
+                    {
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small mb-3"></div>
+                    }
+                    <div class="mb-3">
+                        <label asp-for="Title" class="form-label fw-semibold"></label>
+                        <input asp-for="Title" class="form-control" placeholder="e.g. Office Supplies Q3 2026" />
+                        <span asp-validation-for="Title" class="text-danger small"></span>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label asp-for="Category" class="form-label fw-semibold"></label>
+                            <select asp-for="Category" asp-items="ViewBag.Categories" class="form-select">
+                                <option value="">-- Select Category --</option>
+                            </select>
+                            <span asp-validation-for="Category" class="text-danger small"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="VendorId" class="form-label fw-semibold">Vendor (optional)</label>
+                            <select asp-for="VendorId" asp-items="ViewBag.Vendors" class="form-select">
+                                <option value="">-- Select Vendor --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label asp-for="Amount" class="form-label fw-semibold"></label>
+                        <div class="input-group">
+                            <span class="input-group-text">Rp</span>
+                            <input type="text" id="AmountDisplay" class="form-control" placeholder="0" autocomplete="off" />
+                            <input asp-for="Amount" type="hidden" id="Amount" />
+                        </div>
+                        <div class="form-text text-muted">Contoh: 10.000.000</div>
+                        <span asp-validation-for="Amount" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-4">
+                        <label asp-for="Description" class="form-label fw-semibold"></label>
+                        <textarea asp-for="Description" class="form-control" rows="4" placeholder="Describe the purpose and details of this expense..."></textarea>
+                        <span asp-validation-for="Description" class="text-danger small"></span>
+                    </div>
+                    <div class="mb-4">
+                        <div class="form-check">
+                            <input asp-for="HasConflictOfInterest" class="form-check-input" />
+                            <label asp-for="HasConflictOfInterest" class="form-check-label">I have a conflict of interest with this vendor</label>
+                        </div>
+                        <div class="mt-2" id="conflictDetails" style="display:none;">
+                            <textarea asp-for="ConflictOfInterestDetails" class="form-control" rows="2" placeholder="Please describe the conflict of interest..."></textarea>
+                            <span asp-validation-for="ConflictOfInterestDetails" class="text-danger small"></span>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 justify-content-end">
+                        <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-save me-2"></i>Save as Draft</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+@section Scripts {
+<script>
+// Format amount input
+const amountDisplay = document.getElementById('AmountDisplay');
+const amountHidden = document.getElementById('Amount');
+
+amountDisplay.addEventListener('input', function () {
+    // Strip semua karakter non-digit
+    let raw = this.value.replace(/\D/g, '');
+    if (raw === '') {
+        amountHidden.value = '0';
+        this.value = '';
+        return;
+    }
+    // Simpan nilai murni ke hidden input (tanpa titik/koma)
+    amountHidden.value = raw;
+    // Tampilkan dengan format ribuan pakai titik
+    this.value = parseInt(raw, 10).toLocaleString('id-ID');
+    // Pindahkan cursor ke akhir
+    const len = this.value.length;
+    this.setSelectionRange(len, len);
+});
+
+// Conflict of interest toggle
+document.getElementById('HasConflictOfInterest').addEventListener('change', function() {
+    document.getElementById('conflictDetails').style.display = this.checked ? 'block' : 'none';
+});
+</script>
+}

@@ -1,0 +1,101 @@
+@model List<Zentic.Domain.Entities.AppUser>
+@{
+    ViewData["Title"] = "User Management";
+}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-people me-2 text-primary"></i>User Management</h4>
+        <p class="text-muted small mb-0">Daftar pengguna sistem</p>
+    </div>
+    <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-person-plus me-1"></i>Add User</a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2 card-header-flex">
+        <span class="fw-semibold">All Users <span class="badge bg-primary ms-1">@Model.Count</span></span>
+        <input type="text" id="userSearch" class="form-control form-control-sm" placeholder="Search user..." style="max-width:240px;" />
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="userTable">
+                <thead>
+                    <tr>
+                        <th class="table-mobile-hide">#</th>
+                        <th>Full Name</th>
+                        <th class="table-mobile-hide">Email</th>
+                        <th class="table-mobile-hide">Employee ID</th>
+                        <th>Role</th>
+                        <th class="table-mobile-hide">Last Login</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr><td colspan="7" class="text-center text-muted py-4">No users found.</td></tr>
+                    }
+                    @foreach (var (user, i) in Model.Select((u, i) => (u, i + 1)))
+                    {
+                        <tr>
+                            <td class="text-muted table-mobile-hide">@i</td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-2 d-flex align-items-center justify-content-center bg-primary bg-opacity-10 text-primary fw-bold flex-shrink-0" style="width:30px;height:30px;font-size:0.7rem;">
+                                        @{
+                                            var parts = user.FullName?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? Array.Empty<string>();
+                                            var initials = string.Join("", parts.Take(2).Select(x => x[0].ToString().ToUpper()));
+                                            @(string.IsNullOrEmpty(initials) ? "?" : initials)
+                                        }
+                                    </div>
+                                    <div>
+                                        <span class="fw-semibold d-block">@user.FullName</span>
+                                        <span class="text-muted small d-md-none">@user.Email</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="text-muted small table-mobile-hide">@user.Email</td>
+                            <td class="table-mobile-hide"><span class="badge bg-light text-dark border">@user.EmployeeId</span></td>
+                            <td>
+                                @{
+                    var roleColor = user.Role.ToString() switch {
+                        "Admin" => "danger",
+                        "Finance" => "primary",
+                        "Manager" => "primary",
+                        "Staff" => "success",
+                        "Auditor" => "warning",
+                        _ => "secondary"
+                    };
+                                }
+                                <span class="badge bg-@(roleColor)-subtle text-@roleColor border border-@(roleColor)-subtle">@user.Role</span>
+                            </td>
+                            <td class="text-muted small table-mobile-hide">
+                                @(user.LastLoginAt.HasValue ? user.LastLoginAt.Value.ToString("dd MMM yyyy HH:mm") : "Never")
+                            </td>
+                            <td>
+                                @if (user.IsActive)
+                                {
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Inactive</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+document.getElementById('userSearch').addEventListener('input', function () {
+    const q = this.value.toLowerCase();
+    document.querySelectorAll('#userTable tbody tr').forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+});
+</script>
+}

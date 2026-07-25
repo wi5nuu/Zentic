@@ -1,0 +1,75 @@
+@model Zentic.Domain.Entities.AppUser
+@{
+    ViewData["Title"] = "Edit User";
+}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-person-gear me-2 text-primary"></i>Edit User</h4>
+        <p class="text-muted small mb-0">@Model.FullName &mdash; @Model.Email</p>
+    </div>
+    <a asp-action="Index" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="card border-0 shadow-sm" style="max-width:640px;">
+    <div class="card-body p-4">
+        <form asp-action="Edit" asp-route-id="@Model.Id" method="post">
+            @Html.AntiForgeryToken()
+
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <div class="alert alert-danger">
+                    <ul class="mb-0">
+                        @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                        {
+                            <li>@error.ErrorMessage</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Full Name <span class="text-danger">*</span></label>
+                <input asp-for="FullName" class="form-control" required />
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Email <span class="text-danger">*</span></label>
+                <input asp-for="Email" type="email" class="form-control" required />
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">New Password <span class="text-muted small">(leave blank to keep current)</span></label>
+                <input name="newPassword" type="password" class="form-control" minlength="8" placeholder="Min. 8 characters" />
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Employee ID <span class="text-danger">*</span></label>
+                    <input asp-for="EmployeeId" class="form-control" required />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Position</label>
+                    <input asp-for="Position" class="form-control" />
+                </div>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Role <span class="text-danger">*</span></label>
+                    <select asp-for="Role" asp-items="ViewBag.Roles" class="form-select"></select>
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label fw-semibold">Department</label>
+                    <select asp-for="DepartmentId" asp-items="ViewBag.Departments" class="form-select">
+                        <option value="">-- None --</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3 form-check">
+                <input asp-for="IsActive" class="form-check-input" type="checkbox" />
+                <label class="form-check-label fw-semibold">Active</label>
+            </div>
+
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Save Changes</button>
+                <a asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

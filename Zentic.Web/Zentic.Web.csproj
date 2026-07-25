@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Zentic.Web</RootNamespace>
+    <UserSecretsId>Zentic-web-secrets</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Zentic.Application\Zentic.Application.csproj" />
+    <ProjectReference Include="..\Zentic.Infrastructure\Zentic.Infrastructure.csproj" />
+  </ItemGroup>
+
+
+</Project>

@@ -1,0 +1,61 @@
+@model List<Zentic.Domain.Entities.Department>
+@{
+    ViewData["Title"] = "Departments";
+}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-diagram-3 me-2 text-primary"></i>Departments</h4>
+        <p class="text-muted small mb-0">Daftar departemen yang terdaftar di sistem</p>
+    </div>
+    <a asp-action="Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Add Department</a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header">
+        <span class="fw-semibold">All Departments <span class="badge bg-primary ms-1">@Model.Count</span></span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th class="table-mobile-hide">#</th>
+                        <th>Department Name</th>
+                        <th>Code</th>
+                        <th class="table-mobile-hide">Description</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                     </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr><td colspan="5" class="text-center text-muted py-4">No departments found.</td></tr>
+                    }
+                    @foreach (var (dept, i) in Model.Select((d, i) => (d, i + 1)))
+                    {
+                        <tr>
+                            <td class="text-muted table-mobile-hide">@i</td>
+                            <td>
+                                <div class="fw-semibold">@dept.Name</div>
+                                <div class="text-muted small d-md-none">@(dept.Description ?? "-")</div>
+                            </td>
+                            <td><span class="badge bg-light text-dark border">@dept.Code</span></td>
+                            <td class="text-muted small table-mobile-hide">@(dept.Description ?? "-")</td>
+                            <td>
+                                @if (dept.IsActive)
+                                {
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary-subtle text-secondary border">Inactive</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

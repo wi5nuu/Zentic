@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Zentic.Application/Zentic.Application.csproj" />
+  <Project Path="Zentic.Domain/Zentic.Domain.csproj" />
+  <Project Path="Zentic.Infrastructure/Zentic.Infrastructure.csproj" />
+  <Project Path="Zentic.Tests/Zentic.Tests.csproj" />
+  <Project Path="Zentic.Web/Zentic.Web.csproj" />
+</Solution>

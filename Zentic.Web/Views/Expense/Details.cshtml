@@ -1,0 +1,179 @@
+@model Zentic.Application.DTOs.ExpenseRequisitionDto
+@{
+    ViewData["Title"] = Model.RequisitionNumber;
+    var isFinanceOrAdmin = User.IsInRole("Finance") || User.IsInRole("Admin");
+    var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    var isOwner = currentUserId == Model.RequesterId.ToString();
+    var canApprove = isFinanceOrAdmin && (Model.Status == "Submitted" || Model.Status == "UnderReview");
+}
+<div class="mb-4">
+    <a asp-action="Index" class="text-decoration-none text-muted small"><i class="bi bi-arrow-left me-1"></i>Back to list</a>
+    <div class="d-flex justify-content-between align-items-start mt-1">
+        <div>
+            <h4 class="fw-bold mb-1">@Model.Title</h4>
+            <span class="text-muted small">@Model.RequisitionNumber</span>
+            @if (Model.IsFlaggedForReview)
+            {
+                <span class="badge bg-danger ms-2"><i class="bi bi-flag-fill me-1"></i>Flagged for Review</span>
+            }
+        </div>
+        <span class="@Model.StatusBadgeClass">@Model.Status</span>
+    </div>
+</div>
+
+@if (Model.IsFlaggedForReview)
+{
+    <div class="alert alert-warning mb-4">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>Anti-fraud Alert:</strong> @Model.FlagReason
+        @if (Model.PriceDeviation.HasValue)
+        {
+            <span>(Deviation: @Model.PriceDeviation.Value.ToString("F1")%)</span>
+        }
+    </div>
+}
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0"><h6 class="fw-bold">Requisition Details</h6></div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4 text-muted fw-normal">Title</dt>
+                    <dd class="col-sm-8">@Model.Title</dd>
+                    <dt class="col-sm-4 text-muted fw-normal">Description</dt>
+                    <dd class="col-sm-8">@Model.Description</dd>
+                    <dt class="col-sm-4 text-muted fw-normal">Category</dt>
+                    <dd class="col-sm-8">@Model.Category</dd>
+                    <dt class="col-sm-4 text-muted fw-normal">Department</dt>
+                    <dd class="col-sm-8">@Model.DepartmentName</dd>
+                    @if (!string.IsNullOrEmpty(Model.VendorName))
+                    {
+                        <dt class="col-sm-4 text-muted fw-normal">Vendor</dt>
+                        <dd class="col-sm-8">@Model.VendorName</dd>
+                    }
+                    <dt class="col-sm-4 text-muted fw-normal">Amount</dt>
+                    <dd class="col-sm-8 fw-bold fs-5">Rp @Model.Amount.ToString("N0")</dd>
+                    <dt class="col-sm-4 text-muted fw-normal">Created</dt>
+                    <dd class="col-sm-8">@Model.CreatedAt.ToString("dd MMM yyyy HH:mm")</dd>
+                    @if (Model.SubmittedAt.HasValue)
+                    {
+                        <dt class="col-sm-4 text-muted fw-normal">Submitted</dt>
+                        <dd class="col-sm-8">@Model.SubmittedAt.Value.ToString("dd MMM yyyy HH:mm")</dd>
+                    }
+                    @if (Model.ApprovedAt.HasValue && Model.Status != "Rejected")
+                    {
+                        <dt class="col-sm-4 text-muted fw-normal">Approved</dt>
+                        <dd class="col-sm-8">@Model.ApprovedAt.Value.ToString("dd MMM yyyy HH:mm")</dd>
+                    }
+                    @if (Model.RejectedAt.HasValue)
+                    {
+                        <dt class="col-sm-4 text-muted fw-normal">Rejected</dt>
+                        <dd class="col-sm-8">@Model.RejectedAt.Value.ToString("dd MMM yyyy HH:mm")</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrEmpty(Model.ApprovalNotes) || !string.IsNullOrEmpty(Model.RejectionReason))
+        {
+            <div class="card border-0 shadow-sm mb-3 @(Model.Status == "Rejected" ? "border-danger" : "border-success") border-start border-3">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-1">@(Model.Status == "Rejected" ? "Rejection Reason" : "Approval Notes")</h6>
+                    <p class="mb-0 text-muted">@(Model.ApprovalNotes ?? Model.RejectionReason)</p>
+                    @if (!string.IsNullOrEmpty(Model.ApproverName))
+                    {
+                        <small class="text-muted">— @Model.ApproverName</small>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Model.ApprovalHistory.Any())
+        {
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-0 pt-3 pb-0"><h6 class="fw-bold">Approval Timeline</h6></div>
+                <div class="card-body">
+                    @foreach (var h in Model.ApprovalHistory)
+                    {
+                        <div class="d-flex gap-3 mb-3">
+                            <div class="text-center" style="min-width:60px;">
+                                <div class="text-muted small">@h.Timestamp.ToString("HH:mm")</div>
+                                <div class="text-muted small">@h.Timestamp.ToString("dd MMM")</div>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">@h.ActorName <span class="badge bg-secondary">@h.Action</span></div>
+                                <div class="small text-muted">@h.FromStatus → @h.ToStatus</div>
+                                @if (!string.IsNullOrEmpty(h.Notes))
+                                {
+                                    <div class="small mt-1">@h.Notes</div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (canApprove)
+        {
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white border-0 pt-3 pb-0"><h6 class="fw-bold">Review Requisition</h6></div>
+                <div class="card-body">
+                    <form asp-action="Approve" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Notes (optional)</label>
+                            <textarea name="notes" class="form-control" rows="3" placeholder="Add approval notes..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-2"></i>Approve</button>
+                    </form>
+                    <form asp-action="Reject" method="post" class="mt-2">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Rejection Reason (required)</label>
+                            <textarea name="reason" class="form-control" rows="2" placeholder="State reason for rejection..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-danger"><i class="bi bi-x-circle me-2"></i>Reject</button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0"><h6 class="fw-bold">Requester</h6></div>
+            <div class="card-body">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <div class="rounded-circle bg-primary d-flex align-items-center justify-content-center" style="width:40px;height:40px;">
+                        <i class="bi bi-person-fill text-white"></i>
+                    </div>
+                    <div>
+                        <div class="fw-semibold">@Model.RequesterName</div>
+                        <div class="text-muted small">@Model.DepartmentName</div>
+                    </div>
+                </div>
+                <div class="small text-muted">@Model.RequesterEmail</div>
+            </div>
+        </div>
+
+        @if (Model.Status == "Draft")
+        {
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body d-flex flex-column gap-2">
+                    <form asp-action="Submit" asp-route-id="@Model.Id" method="post">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-send me-2"></i>Submit for Approval</button>
+                    </form>
+                    <form asp-action="Cancel" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('Cancel this requisition?')">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-outline-danger w-100"><i class="bi bi-x-circle me-2"></i>Cancel</button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+</div>

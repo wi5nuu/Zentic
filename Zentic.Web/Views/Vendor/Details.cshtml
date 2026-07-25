@@ -1,0 +1,47 @@
+@model Zentic.Application.DTOs.VendorDto
+@{
+    ViewData["Title"] = "Vendor Details";
+}
+<div class="mb-4">
+    <a asp-action="Index" class="text-decoration-none text-muted small"><i class="bi bi-arrow-left me-1"></i>Back to Vendors</a>
+    <h4 class="fw-bold mt-1 mb-0"><i class="bi bi-shop me-2 text-primary"></i>Vendor Details</h4>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header">
+                <span class="fw-semibold">Vendor Information</span>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless mb-0">
+                    <tr>
+                        <td class="text-muted small fw-semibold" style="width:40%">Vendor Name</td>
+                        <td class="fw-semibold">@Model.Name</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted small fw-semibold">Vendor Code</td>
+                        <td><span class="badge bg-light text-dark border">@Model.Code</span></td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted small fw-semibold">Account Number</td>
+                        <td>@(Model.MaskedAccountNumber ?? "-")</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted small fw-semibold">Status</td>
+                        <td>
+                            @if (Model.Status == "Active")
+                            {
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary-subtle text-secondary border">@Model.Status</span>
+                            }
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
