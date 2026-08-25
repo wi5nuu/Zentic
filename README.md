@@ -21,6 +21,12 @@ Enterprise-grade expense requisition system built with **Clean Architecture** on
 - **Fraud Detection**: Real-time flagging of suspicious patterns (price deviation vs benchmark, structuring patterns)
 - **Payment Flow**: Approved requisitions can be marked as Paid by Finance/Admin
 
+### Approval Workflow Engine
+- **Configurable Workflows**: Admin-defined multi-step approval chains matched by department, category, and amount range with priority ordering
+- **Flexible Approvers**: Each step can target a specific user, role, requester's manager, department head, Finance, or Admin — with parallel steps and require-all-approvers options
+- **Approval Delegation**: Users can delegate their approval authority to colleagues for a date range (optionally scoped by department and max amount), with overlap prevention and self-revocation
+- **Escalation Rules**: Time-based escalation of stalled approvals to a user or role, with notification controls for both original approver and escalation target
+
 ### Security
 - **Cookie Authentication**: Custom cookie-based auth (BCrypt hashed passwords, not ASP.NET Identity)
 - **Rate Limiting**: Brute-force protection on login (10 attempts per 15-minute window)
@@ -210,6 +216,15 @@ ZenticEnterprise/
 | GET    | `/Report`              | Financial reports        | Finance/Admin |
 | GET    | `/User`                | User management          | Admin         |
 | GET    | `/Department`          | Department management    | Admin         |
+| GET    | `/ApprovalWorkflow`    | Workflow list            | Admin         |
+| POST   | `/ApprovalWorkflow/Create` | Create workflow with steps | Admin   |
+| POST   | `/ApprovalWorkflow/Edit/{id}` | Replace workflow steps | Admin  |
+| POST   | `/ApprovalWorkflow/Delete/{id}` | Soft-delete workflow | Admin |
+| GET    | `/ApprovalWorkflow/EscalationRules` | Escalation rules list | Admin |
+| POST   | `/ApprovalWorkflow/CreateEscalationRule` | Create escalation rule | Admin |
+| GET    | `/Delegation`          | My incoming/outgoing delegations | Yes |
+| POST   | `/Delegation/Create`   | Create approval delegation | Yes     |
+| POST   | `/Delegation/Revoke/{id}` | Revoke own delegation | Yes       |
 
 ---
 
@@ -266,6 +281,8 @@ dotnet test
 The test project covers:
 - Fraud detection rule engine (price deviation, structuring patterns)
 - Quotation enforcement, price history recording, payment flow
+- Password strength validation (character classes, repeating/sequential rules, common passwords, history reuse)
+- Money value object arithmetic, currency guards, and equality semantics
 - Service layer validations
 - Repository operations
 
