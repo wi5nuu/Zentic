@@ -8,7 +8,14 @@
         <h4 class="fw-bold mb-0">Expense Requisitions</h4>
         <p class="text-muted small mb-0">@Model.TotalCount total records</p>
     </div>
-    <a asp-action="Create" class="btn btn-primary"><i class="bi bi-plus-circle me-2"></i>New Requisition</a>
+    <div class="d-flex gap-2">
+        @if (User.IsInRole("Admin") || User.IsInRole("Finance"))
+        {
+            <a asp-action="Export" asp-route-status="@filter?.Status" asp-route-search="@filter?.Search" asp-route-category="@filter?.Category" asp-route-flagged="@filter?.Flagged"
+               class="btn btn-outline-secondary" title="Export filtered list to CSV"><i class="bi bi-download me-2"></i>Export CSV</a>
+        }
+        <a asp-action="Create" class="btn btn-primary"><i class="bi bi-plus-circle me-2"></i>New Requisition</a>
+    </div>
 </div>
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-2">
@@ -97,7 +104,7 @@
             @for (int i = 1; i <= Model.TotalPages; i++)
             {
                 <li class="page-item @(i == Model.Page ? "active" : "")">
-                    <a class="page-link" asp-action="Index" asp-route-page="@i" asp-route-status="@filter?.Status" asp-route-search="@filter?.Search" asp-route-category="@filter?.Category">@i</a>
+                    <a class="page-link" asp-action="Index" asp-route-page="@i" asp-route-status="@filter?.Status" asp-route-search="@filter?.Search" asp-route-category="@filter?.Category" asp-route-flagged="@filter?.Flagged">@i</a>
                 </li>
             }
         </ul>
