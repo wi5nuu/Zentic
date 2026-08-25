@@ -3,6 +3,7 @@ using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Zentic.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Zentic.Tests.UnitTests
@@ -15,6 +16,12 @@ namespace Zentic.Tests.UnitTests
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .Options;
             return new AppDbContext(options);
+        }
+
+        private static FraudDetectionService CreateService(AppDbContext db)
+        {
+            var fraudOptions = Options.Create(new FraudDetectionOptions());
+            return new FraudDetectionService(db, fraudOptions);
         }
 
         [Fact]
@@ -32,7 +39,7 @@ namespace Zentic.Tests.UnitTests
             });
             await db.SaveChangesAsync();
 
-            var service = new FraudDetectionService(db);
+            var service = CreateService(db);
             var result = await service.CheckPriceAsync(1, 1_000_000, "Office Chair");
 
             Assert.False(result.IsFlagged);
@@ -57,7 +64,7 @@ namespace Zentic.Tests.UnitTests
             }
             await db.SaveChangesAsync();
 
-            var service = new FraudDetectionService(db);
+            var service = CreateService(db);
             var result = await service.CheckPriceAsync(1, 700_000, "Office Chair");
 
             Assert.True(result.IsFlagged);
@@ -84,7 +91,7 @@ namespace Zentic.Tests.UnitTests
             }
             await db.SaveChangesAsync();
 
-            var service = new FraudDetectionService(db);
+            var service = CreateService(db);
             var result = await service.CheckPriceAsync(1, 550_000, "Office Chair");
 
             Assert.False(result.IsFlagged);
@@ -117,7 +124,7 @@ namespace Zentic.Tests.UnitTests
             }
             await db.SaveChangesAsync();
 
-            var service = new FraudDetectionService(db);
+            var service = CreateService(db);
             var result = await service.IsStructuringPatternAsync(1, 1, 50_000_000);
 
             Assert.False(result);
@@ -149,7 +156,7 @@ namespace Zentic.Tests.UnitTests
             }
             await db.SaveChangesAsync();
 
-            var service = new FraudDetectionService(db);
+            var service = CreateService(db);
             var result = await service.IsStructuringPatternAsync(1, 1, 85_000_000);
 
             Assert.True(result);
@@ -181,7 +188,7 @@ namespace Zentic.Tests.UnitTests
             }
             await db.SaveChangesAsync();
 
-            var service = new FraudDetectionService(db);
+            var service = CreateService(db);
             var result = await service.IsStructuringPatternAsync(1, 1, 85_000_000);
 
             Assert.False(result);
@@ -205,11 +212,11 @@ namespace Zentic.Tests.UnitTests
             }
             await db.SaveChangesAsync();
 
-            var service = new FraudDetectionService(db);
+            var service = CreateService(db);
             var result = await service.CheckPriceAsync(1, 100_000, "Free Item");
 
             Assert.False(result.IsFlagged);
-            Assert.Contains("zero", result.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Insufficient price history", result.Message, StringComparison.OrdinalIgnoreCase);
         }
     }
 }
