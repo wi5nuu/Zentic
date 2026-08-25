@@ -1,0 +1,217 @@
+@model Zentic.Application.DTOs.CreateApprovalWorkflowDto
+@{
+    var submitLabel = (string)(ViewData["SubmitLabel"] ?? "Save");
+    var cancelController = "ApprovalWorkflow";
+}
+<form asp-action="@ViewData["FormAction"]" method="post" id="workflowForm">
+    @Html.AntiForgeryToken()
+    @if ((string?)ViewData["FormAction"] == "Edit")
+    {
+        <input type="hidden" name="id" value="@ViewData["EditId"]" />
+    }
+
+    <div class="row g-3">
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header fw-semibold">Workflow Details</div>
+                <div class="card-body p-4">
+                    <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                        <input asp-for="Name" class="form-control" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Description</label>
+                        <textarea asp-for="Description" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Department</label>
+                            <select asp-for="DepartmentId" asp-items="ViewBag.Departments" class="form-select">
+                                <option value="">— All departments —</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-semibold">Category</label>
+                            <select asp-for="Category" asp-items="ViewBag.Categories" class="form-select">
+                                <option value="">— All categories —</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Min Amount</label>
+                            <input asp-for="MinAmount" type="number" step="0.01" min="0" class="form-control" />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Max Amount</label>
+                            <input asp-for="MaxAmount" type="number" step="0.01" min="0" class="form-control" />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-semibold">Priority</label>
+                            <input asp-for="Priority" type="number" class="form-control" />
+                            <div class="form-text">Lower = evaluated first.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold">Approval Steps</span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="addStep"><i class="bi bi-plus-lg me-1"></i>Add Step</button>
+                </div>
+                <div class="card-body p-3" id="stepsContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>@submitLabel</button>
+        <a asp-controller="@cancelController" asp-action="Index" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+<script>
+    (function () {
+        var container = document.getElementById('stepsContainer');
+        var addBtn = document.getElementById('addStep');
+        var template = document.getElementById('stepTemplate').innerHTML;
+        var users = @Html.Raw(Json.Serialize((IEnumerable<SelectListItem>)ViewBag.Users));
+        var departments = @Html.Raw(Json.Serialize((IEnumerable<SelectListItem>)ViewBag.Departments));
+        var roles = @Html.Raw(Json.Serialize((IEnumerable<SelectListItem>)ViewBag.Roles));
+        var escalationRules = @Html.Raw(Json.Serialize((IEnumerable<SelectListItem>)ViewBag.EscalationRules));
+        var initialSteps = @Html.Raw(Json.Serialize(Model.Steps));
+        var approverTypes = [
+            { v: '1', label: 'SpecificUser' },
+            { v: '2', label: 'Role' },
+            { v: '3', label: 'Manager' },
+            { v: '4', label: 'DepartmentHead' },
+            { v: '5', label: 'Finance' },
+            { v: '6', label: 'Admin' }
+        ];
+
+        function opts(list, emptyLabel, selected) {
+            return '<option value="">' + emptyLabel + '</option>' +
+                list.map(function (o) {
+                    var sel = String(o.Value ?? o.value) === String(selected ?? '') ? ' selected' : '';
+                    return '<option value="' + (o.Value ?? o.value) + '"' + sel + '>' + (o.Text ?? o.text) + '</option>';
+                }).join('');
+        }
+
+        function esc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function toggleTypeFields(row, typeId) {
+            row.querySelector('.specific-user-field').classList.toggle('d-none', typeId !== '1');
+            row.querySelector('.role-field').classList.toggle('d-none', typeId !== '2');
+            row.querySelector('.dept-head-field').classList.toggle('d-none', typeId !== '4');
+        }
+
+        function reindex() {
+            container.querySelectorAll('.step-editor').forEach(function (row, idx) {
+                row.setAttribute('data-step-idx', idx);
+                row.querySelector('.step-order-badge').textContent = idx + 1;
+                row.querySelectorAll('[name]').forEach(function (el) {
+                    el.name = el.name.replace(/Steps\[\d+\]/g, 'Steps[' + idx + ']');
+                });
+                row.querySelectorAll('.form-check-input[id]').forEach(function (el) {
+                    el.id = el.id.replace(/__\d+$/, '_' + idx);
+                });
+            });
+        }
+
+        function addStep(data) {
+            data = data || {};
+            var html = template
+                .split('__name__').join(esc(data.name))
+                .split('__desc__').join(esc(data.description))
+                .split('__users__').join(opts(users, '— Select user —', data.specificUserId))
+                .split('__roles__').join(opts(roles, '— Select role —', data.requiredRole))
+                .split('__departments__').join(opts(departments, '— Select department —', data.departmentId))
+                .split('__rules__').join(opts(escalationRules, '— None —', data.escalationRuleId))
+                .split('__adChecked__').join(data.allowDelegation !== false ? ' checked' : '')
+                .split('__raChecked__').join(data.requireAllApprovers ? ' checked' : '')
+                .split('__paChecked__').join(data.isParallel ? ' checked' : '');
+            container.insertAdjacentHTML('beforeend', html);
+            var row = container.lastElementChild;
+
+            var typeSel = row.querySelector('.approver-type');
+            typeSel.innerHTML = approverTypes.map(function (t) {
+                var sel = t.v === String(data.approverType ?? '') ? ' selected' : '';
+                return '<option value="' + t.v + '"' + sel + '>' + t.label + '</option>';
+            }).join('');
+            typeSel.addEventListener('change', function () { toggleTypeFields(row, typeSel.value); });
+            toggleTypeFields(row, typeSel.value);
+
+            row.querySelector('.remove-step').addEventListener('click', function () {
+                row.remove();
+                reindex();
+            });
+            return row;
+        }
+
+        addBtn.addEventListener('click', function () { addStep(); });
+
+        if (initialSteps.length > 0) {
+            initialSteps.forEach(addStep);
+        } else {
+            addStep();
+        }
+    })();
+</script>
+
+<template id="stepTemplate">
+    <div class="card mb-3 step-editor border">
+        <div class="card-body bg-body-tertiary rounded">
+            <input type="hidden" name="Steps[__IDX__].AllowDelegation" value="false" />
+            <input type="hidden" name="Steps[__IDX__].RequireAllApprovers" value="false" />
+            <input type="hidden" name="Steps[__IDX__].IsParallel" value="false" />
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <span class="badge bg-primary step-order-badge">?</span>
+                <input type="text" name="Steps[__IDX__].Name" class="form-control form-control-sm" placeholder="Step name (e.g. Manager Approval)" value="__name__" required />
+                <button type="button" class="btn btn-sm btn-outline-danger remove-step"><i class="bi bi-trash"></i></button>
+            </div>
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Approver Type</label>
+                    <select name="Steps[__IDX__].ApproverType" class="form-select form-select-sm approver-type"></select>
+                </div>
+                <div class="col-md-6 specific-user-field">
+                    <label class="form-label small fw-semibold">Specific User</label>
+                    <select name="Steps[__IDX__].SpecificUserId" class="form-select form-select-sm">__users__</select>
+                </div>
+                <div class="col-md-6 role-field d-none">
+                    <label class="form-label small fw-semibold">Required Role</label>
+                    <select name="Steps[__IDX__].RequiredRole" class="form-select form-select-sm">__roles__</select>
+                </div>
+                <div class="col-md-6 dept-head-field d-none">
+                    <label class="form-label small fw-semibold">Department</label>
+                    <select name="Steps[__IDX__].DepartmentId" class="form-select form-select-sm">__departments__</select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold">Escalation Rule</label>
+                    <select name="Steps[__IDX__].EscalationRuleId" class="form-select form-select-sm">__rules__</select>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-3 mt-3 small">
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="ad__IDX__" name="Steps[__IDX__].AllowDelegation" value="true" __adChecked__ />
+                    <label class="form-check-label" for="ad__IDX__">Allow delegation</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="ra__IDX__" name="Steps[__IDX__].RequireAllApprovers" value="true" __raChecked__ />
+                    <label class="form-check-label" for="ra__IDX__">Require all approvers</label>
+                </div>
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="pa__IDX__" name="Steps[__IDX__].IsParallel" value="true" __paChecked__ />
+                    <label class="form-check-label" for="pa__IDX__">Parallel</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
