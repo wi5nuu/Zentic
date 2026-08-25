@@ -1,4 +1,4 @@
-# Zentic — Expense Requisition System
+sekafa# Zentic — Expense Requisition System
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/)
@@ -7,6 +7,8 @@
 
 Enterprise-grade expense requisition system built with **Clean Architecture** on **ASP.NET MVC 10**, **Entity Framework Core**, and **SQL Server**. Designed for finance divisions requiring multi-tier approval workflows, fraud detection, vendor management, and comprehensive audit trails.
 
+> 📖 **Panduan setup internal lengkap (Bahasa Indonesia):** [`docs/SETUP.md`](docs/SETUP.md) — mencakup tech stack, konfigurasi database, akun demo, alur kerja, troubleshooting, dan deployment.
+
 ---
 
 ## Features
@@ -14,15 +16,16 @@ Enterprise-grade expense requisition system built with **Clean Architecture** on
 ### Core Workflow
 - **Multi-Role Access**: Admin, Finance, Manager, Staff, Auditor — each with granular permissions
 - **Expense Requisition CRUD**: Create, submit, track, and archive requisitions through a structured lifecycle
-- **Approval Pipeline**: Draft → Submitted → L1 Manager → Finance Review → Approved/Rejected
-- **Fraud Detection**: Real-time flagging of suspicious patterns (duplicate invoices, amount anomalies, velocity checks)
-- **3-Way Matching**: PO ↔ Invoice ↔ Goods Receipt verification before payment approval
+- **Approval Pipeline**: Draft → Submitted → L1 Manager → Finance Review → Approved → Paid
+- **3-Way Matching**: Requisitions above the quotation threshold (Rp 50,000,000) require at least 2 vendor quotations before approval
+- **Fraud Detection**: Real-time flagging of suspicious patterns (price deviation vs benchmark, structuring patterns)
+- **Payment Flow**: Approved requisitions can be marked as Paid by Finance/Admin
 
 ### Security
-- **Cookie Authentication**: ASP.NET Core Identity with sliding expiration and HttpOnly cookies
+- **Cookie Authentication**: Custom cookie-based auth (BCrypt hashed passwords, not ASP.NET Identity)
 - **Rate Limiting**: Brute-force protection on login (10 attempts per 15-minute window)
 - **Password Hashing**: BCrypt.Net with configurable work factor
-- **Encryption**: AES-256-GCM for sensitive stored data via configurable key management
+- **Encryption**: AES-256-CBC (random IV per record) for sensitive stored data via configurable key management
 - **Authorization Policies**: Role-based access for approval, audit logs, vendor management
 
 ### Finance Dashboard
@@ -58,14 +61,14 @@ Enterprise-grade expense requisition system built with **Clean Architecture** on
 |----------------|-------------------------------------|
 | Framework      | ASP.NET MVC (.NET 10)               |
 | ORM            | Entity Framework Core 10            |
-| Database       | SQL Server (LocalDB / Express)       |
-| Authentication | ASP.NET Cookie Authentication       |
+| Database       | SQL Server (SQLEXPRESS / Express)   |
+| Authentication | Custom Cookie Authentication        |
 | Authorization  | Policy-based role authorization     |
 | UI             | Bootstrap 5 + Bootstrap Icons       |
 | Password       | BCrypt.Net                          |
-| Encryption     | AES-256-GCM                         |
+| Encryption     | AES-256-CBC (random IV)             |
 | Validation     | FluentValidation                    |
-| Testing        | xUnit + Moq                         |
+| Testing        | xUnit + Moq + FluentAssertions      |
 
 ---
 
@@ -73,8 +76,10 @@ Enterprise-grade expense requisition system built with **Clean Architecture** on
 
 ### Prerequisites
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- SQL Server LocalDB (included with Visual Studio) or SQL Server Express
+- SQL Server Express / LocalDB (included with Visual Studio)
 - Visual Studio 2022+ / JetBrains Rider / VS Code
+
+> 📖 For the full internal setup guide (database config, demo accounts, troubleshooting), see [`docs/SETUP.md`](docs/SETUP.md).
 
 ### Quick Start
 
@@ -90,7 +95,7 @@ dotnet restore
 dotnet build
 
 # Run database migrations and seed data
-# (Auto-migrates on first startup)
+# (Auto-creates and seeds the database on first startup — no migrations used)
 
 # Launch the application
 dotnet run --project Zentic.Web
@@ -100,13 +105,15 @@ Open **https://localhost:7081** in your browser.
 
 ### Demo Accounts
 
-| Email                         | Password       | Role      |
-|-------------------------------|----------------|-----------|
-| admin@company.internal        | Admin@12345    | Admin     |
-| finance.manager@company.internal | Finance@12345 | Finance   |
-| budi.santoso@company.internal | Staff@12345    | Staff     |
-| siti.rahayu@company.internal  | Manager@12345  | Manager   |
-| auditor@company.internal      | Auditor@12345  | Auditor   |
+All seeded demo accounts use the same password:
+
+| Email                         | Password   | Role      |
+|-------------------------------|------------|-----------|
+| admin@company.internal        | P@ssw0rd   | Admin     |
+| finance.manager@company.internal | P@ssw0rd | Finance   |
+| budi.santoso@company.internal | P@ssw0rd   | Staff     |
+| siti.rahayu@company.internal  | P@ssw0rd   | Manager   |
+| auditor@company.internal      | P@ssw0rd   | Auditor   |
 
 > **⚠️ IMPORTANT**: Change all demo passwords before deploying to production.
 
@@ -190,8 +197,13 @@ ZenticEnterprise/
 | GET    | `/`                    | Dashboard with KPIs      | Yes           |
 | GET    | `/Expense`             | Requisition list         | Yes           |
 | POST   | `/Expense/Create`      | New requisition          | Yes           |
-| POST   | `/Expense/Approve/{id}`| Approve requisition      | Finance/Admin |
-| POST   | `/Expense/Reject/{id}` | Reject requisition       | Finance/Admin |
+| POST   | `/Expense/Approve/{id}`| Approve requisition      | Finance/Admin/Manager |
+| POST   | `/Expense/Reject/{id}` | Reject requisition       | Finance/Admin/Manager |
+| POST   | `/Expense/MarkAsPaid/{id}` | Mark approved requisition as paid | Finance/Admin |
+| POST   | `/Expense/AddQuotation` | Add vendor quotation    | Finance/Admin |
+| POST   | `/Expense/SelectQuotation` | Select winning quotation | Finance/Admin |
+| POST   | `/Expense/RemoveQuotation` | Remove quotation      | Finance/Admin |
+| GET    | `/Expense/Export`      | Export filtered list to CSV | Finance/Admin |
 | GET    | `/Vendor`              | Vendor list              | Yes           |
 | POST   | `/Vendor/Create`       | New vendor               | Finance/Admin |
 | GET    | `/AuditLog`            | Audit trail              | Finance/Admin |
@@ -205,13 +217,13 @@ ZenticEnterprise/
 
 The system automatically flags requisitions matching these patterns:
 
-- **Duplicate Invoice Check**: Same invoice number used for different requisitions
-- **Amount Anomaly**: Requested amount deviates significantly from historical averages
-- **Amount Rounding**: Suspiciously round numbers (e.g., exactly 10,000,000)
-- **Velocity Check**: Requester submits unusually high number of requests in a short period
-- **New Vendor Large Amount**: Large requisition assigned to a recently created vendor
-- **Category Mismatch**: Vendor's typical category doesn't match the requisition's category
-- **Weekend Submission**: Requisition submitted outside business hours
+- **Price Deviation**: Requested amount deviates > 20% from the vendor's historical average for similar items
+- **Structuring Pattern**: Requester submits ≥ 5 high-value requests (≥ Rp 70,000,000) to the same vendor within 30 days
+- **Insufficient Benchmark**: New vendors or items with < 3 price history records are not flagged but advisory messages are shown
+
+Flagged requisitions are routed to **Under Review** status upon submission for Finance review.
+
+> Planned rules (not yet implemented): duplicate invoice detection, weekend submissions, category mismatches.
 
 ---
 
@@ -222,7 +234,7 @@ The system automatically flags requisitions matching these patterns:
 ```json
 {
   "ConnectionStrings": {
-    "DefaultConnection": "Server=(localdb)\\MSSQLLocalDB;Database=ZenticDB;Trusted_Connection=True;"
+    "DefaultConnection": "Server=localhost\\SQLEXPRESS;Database=ZenticEnterprise;Trusted_Connection=True;TrustServerCertificate=True;"
   },
   "AppSettings": {
     "CompanyName": "PT Zentic",
@@ -236,10 +248,10 @@ The system automatically flags requisitions matching these patterns:
 
 | Setting                    | Default   | Description                              |
 |----------------------------|-----------|------------------------------------------|
-| `MultipleQuotationThreshold` | 50,000,000 | Amount above which multiple quotes required |
-| `L2ApprovalThreshold`        | 100,000,000 | Amount above which L2 approval required   |
+| `MultipleQuotationThreshold` | 50,000,000 | Amount above which ≥ 2 vendor quotations are required before approval |
+| `L2ApprovalThreshold`        | 100,000,000 | Reserved for a future L2 approval tier (not yet enforced) |
 
-> **🔐 Security**: Use `dotnet user-secrets` or environment variables for production secrets. Never commit real passwords or encryption keys.
+> **🔐 Security**: The encryption key (`Encryption:Key` in `appsettings.Development.json`) is a weak development placeholder. Use `dotnet user-secrets` or environment variables for production — never commit real keys. See [`docs/SETUP.md`](docs/SETUP.md) §6.2.
 
 ---
 
@@ -252,7 +264,8 @@ dotnet test
 ```
 
 The test project covers:
-- Fraud detection rule engine
+- Fraud detection rule engine (price deviation, structuring patterns)
+- Quotation enforcement, price history recording, payment flow
 - Service layer validations
 - Repository operations
 
@@ -260,12 +273,18 @@ The test project covers:
 
 ## Roadmap
 
+- [x] **Payment Flow**: Mark approved requisitions as paid
+- [x] **3-Way Matching**: Multi-quotation enforcement above threshold
+- [x] **Price History Benchmarking**: Auto-recorded on approval for fraud detection
+- [x] **CSV Export**: Filtered requisition list export
 - [ ] **Power BI Integration**: Embedded analytics dashboard for executive reporting
 - [ ] **Email Notifications**: Automated approval/rejection emails via SMTP
 - [ ] **Mobile Approval**: Approve/reject requisitions from mobile devices
+- [ ] **Document Upload**: Attach invoices, POs, and quotation files
 - [ ] **Multi-Currency**: Support for USD, EUR, and other currencies with live exchange rates
 - [ ] **SSO Integration**: Azure AD / OAuth 2.0 single sign-on
 - [ ] **Docker Support**: Containerized deployment with Docker Compose
+- [ ] **EF Migrations**: Replace `EnsureCreatedAsync` with versioned migrations
 
 ---
 
