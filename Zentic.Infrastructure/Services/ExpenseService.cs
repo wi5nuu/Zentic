@@ -4,6 +4,7 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -16,6 +17,7 @@ namespace Zentic.Infrastructure.Services
         private readonly IAuditService _auditService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly AppDbContext _db;
+        private readonly IConfiguration _configuration;
 
         public ExpenseService(
             IRepository<ExpenseRequisition> requisitionRepo,
@@ -24,7 +26,8 @@ namespace Zentic.Infrastructure.Services
             IFraudDetectionService fraudDetection,
             IAuditService auditService,
             IUnitOfWork unitOfWork,
-            AppDbContext db)
+            AppDbContext db,
+            IConfiguration configuration)
         {
             _requisitionRepo = requisitionRepo;
             _userRepo = userRepo;
@@ -33,19 +36,20 @@ namespace Zentic.Infrastructure.Services
             _auditService = auditService;
             _unitOfWork = unitOfWork;
             _db = db;
+            _configuration = configuration;
         }
 
         public async Task<PaginatedResult<ExpenseRequisitionDto>> GetPagedAsync(ExpenseFilterDto filter, int userId, string role)
         {
             var query = _requisitionRepo.Query()
-                .Include(r => r.Requester)
+                .Include(r => r.Requester).ThenInclude(u => u!.Department)
                 .Include(r => r.Department)
                 .Include(r => r.Approver)
                 .Include(r => r.Vendor)
                 .Where(r => !r.IsDeleted);
 
-            if (role == UserRole.Staff.ToString())
-                query = query.Where(r => r.RequesterId == userId);
+            // Role-based filtering
+            query = await ApplyRoleBasedFilter(query, userId, role);
 
             if (!string.IsNullOrEmpty(filter.Status) && Enum.TryParse<RequisitionStatus>(filter.Status, out var status))
                 query = query.Where(r => r.Status == status);
@@ -55,6 +59,9 @@ namespace Zentic.Infrastructure.Services
 
             if (!string.IsNullOrEmpty(filter.Category) && Enum.TryParse<ExpenseCategory>(filter.Category, out var category))
                 query = query.Where(r => r.Category == category);
+
+            if (filter.Flagged == true)
+                query = query.Where(r => r.IsFlaggedForReview);
 
             var totalCount = await query.CountAsync();
 
@@ -78,6 +85,7 @@ namespace Zentic.Infrastructure.Services
                     CreatedAt = r.CreatedAt,
                     SubmittedAt = r.SubmittedAt,
                     ApprovedAt = r.ApprovedAt,
+                    PaidAt = r.PaidAt,
                     RequesterName = r.Requester!.FullName,
                     RequesterEmail = r.Requester!.Email,
                     ApproverName = r.Approver != null ? r.Approver.FullName : null,
@@ -95,6 +103,58 @@ namespace Zentic.Infrastructure.Services
             };
         }
 
+        private async Task<IQueryable<ExpenseRequisition>> ApplyRoleBasedFilter(IQueryable<ExpenseRequisition> query, int userId, string role)
+        {
+            if (role == UserRole.Staff.ToString())
+            {
+                // Staff can only see their own requisitions
+                return query.Where(r => r.RequesterId == userId);
+            }
+            
+            if (role == UserRole.Manager.ToString())
+            {
+                // Manager can see:
+                // 1. Their own requisitions
+                // 2. Requisitions from their subordinates (direct and indirect)
+                // 3. Requisitions from their department
+                var manager = await _userRepo.GetByIdAsync(userId);
+                if (manager == null) return query.Where(r => r.RequesterId == userId);
+
+                var subordinateIds = await GetSubordinateIdsAsync(userId);
+                subordinateIds.Add(userId); // Include self
+                
+                return query.Where(r => 
+                    subordinateIds.Contains(r.RequesterId) || 
+                    r.DepartmentId == manager.DepartmentId);
+            }
+            
+            if (role == UserRole.Finance.ToString() || role == UserRole.Admin.ToString() || role == UserRole.Auditor.ToString())
+            {
+                // Finance, Admin, Auditor can see all requisitions
+                return query;
+            }
+
+            // Default: only own requisitions
+            return query.Where(r => r.RequesterId == userId);
+        }
+
+        private async Task<List<int>> GetSubordinateIdsAsync(int managerId)
+        {
+            var subordinates = await _db.Users
+                .Where(u => u.ManagerId == managerId && !u.IsDeleted)
+                .Select(u => u.Id)
+                .ToListAsync();
+
+            var allSubordinates = new List<int>(subordinates);
+            foreach (var subId in subordinates)
+            {
+                var subSubordinates = await GetSubordinateIdsAsync(subId);
+                allSubordinates.AddRange(subSubordinates);
+            }
+
+            return allSubordinates;
+        }
+
         public async Task<ExpenseRequisitionDto?> GetByIdAsync(int id, int userId, string role)
         {
             var query = _requisitionRepo.Query()
@@ -103,10 +163,11 @@ namespace Zentic.Infrastructure.Services
                 .Include(r => r.Department)
                 .Include(r => r.Vendor)
                 .Include(r => r.ApprovalHistory).ThenInclude(h => h.Actor)
+                .Include(r => r.Quotations).ThenInclude(q => q.Vendor)
                 .Where(r => r.Id == id && !r.IsDeleted);
 
-            if (role == UserRole.Staff.ToString())
-                query = query.Where(r => r.RequesterId == userId);
+            // Apply role-based filtering
+            query = await ApplyRoleBasedFilter(query, userId, role);
 
             var req = await query.FirstOrDefaultAsync();
             if (req == null) return null;
@@ -129,6 +190,7 @@ namespace Zentic.Infrastructure.Services
                 SubmittedAt = req.SubmittedAt,
                 ApprovedAt = req.ApprovedAt,
                 RejectedAt = req.RejectedAt,
+                PaidAt = req.PaidAt,
                 ApprovalNotes = req.ApprovalNotes,
                 RejectionReason = req.RejectionReason,
                 RequesterName = req.Requester!.FullName,
@@ -136,6 +198,7 @@ namespace Zentic.Infrastructure.Services
                 ApproverName = req.Approver?.FullName,
                 DepartmentName = req.Department!.Name,
                 VendorName = req.Vendor?.Name,
+                VendorId = req.VendorId,
                 ApprovalHistory = req.ApprovalHistory.OrderBy(h => h.Timestamp).Select(h => new ApprovalHistoryDto
                 {
                     ActorName = h.Actor!.FullName,
@@ -144,6 +207,16 @@ namespace Zentic.Infrastructure.Services
                     ToStatus = h.ToStatus.ToString(),
                     Notes = h.Notes,
                     Timestamp = h.Timestamp
+                }).ToList(),
+                Quotations = req.Quotations.OrderBy(q => q.QuotationDate).Select(q => new QuotationDto
+                {
+                    Id = q.Id,
+                    VendorId = q.VendorId,
+                    VendorName = q.Vendor != null ? q.Vendor.Name : $"Vendor #{q.VendorId}",
+                    QuotedPrice = q.QuotedPrice,
+                    QuotationDate = q.QuotationDate,
+                    IsSelected = q.IsSelected,
+                    SelectionReason = q.SelectionReason
                 }).ToList()
             };
         }
@@ -248,7 +321,7 @@ namespace Zentic.Infrastructure.Services
             if (req.Status != RequisitionStatus.Draft) throw new InvalidOperationException("Only draft requisitions can be submitted.");
 
             var oldStatus = req.Status;
-            req.Status = RequisitionStatus.Submitted;
+            req.Status = req.IsFlaggedForReview ? RequisitionStatus.UnderReview : RequisitionStatus.Submitted;
             req.SubmittedAt = DateTime.UtcNow;
             req.UpdatedAt = DateTime.UtcNow;
 
@@ -266,6 +339,20 @@ namespace Zentic.Infrastructure.Services
             if (req.Status != RequisitionStatus.Submitted && req.Status != RequisitionStatus.UnderReview)
                 throw new InvalidOperationException("Requisition cannot be approved at this stage.");
 
+            // Authorization check: verify approver has permission to approve this requisition
+            var canApprove = await CanUserApproveAsync(req, approverId);
+            if (!canApprove)
+                throw new UnauthorizedAccessException("You are not authorized to approve this requisition at this stage.");
+
+            // 3-way matching rule: amount above threshold requires at least 2 vendor quotations
+            if (req.VendorId.HasValue && req.Amount >= GetMultipleQuotationThreshold())
+            {
+                var quotationCount = await _db.RequisitionQuotations.CountAsync(q => q.RequisitionId == id && !q.IsDeleted);
+                if (quotationCount < 2)
+                    throw new InvalidOperationException(
+                        $"Requisitions of {GetMultipleQuotationThreshold():N0} IDR or more require at least 2 vendor quotations before approval.");
+            }
+
             var oldStatus = req.Status;
             req.Status = RequisitionStatus.Approved;
             req.ApproverId = approverId;
@@ -275,8 +362,145 @@ namespace Zentic.Infrastructure.Services
 
             await _requisitionRepo.UpdateAsync(req);
             await _unitOfWork.SaveChangesAsync();
+
+            // Record price history so future fraud-detection benchmarking has data
+            if (req.VendorId.HasValue)
+            {
+                var priceHistory = new PriceHistory
+                {
+                    VendorId = req.VendorId.Value,
+                    RequisitionId = req.Id,
+                    ItemDescription = req.Title,
+                    Price = req.Amount,
+                    PurchaseDate = DateTime.UtcNow,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _db.PriceHistories.Add(priceHistory);
+                await _db.SaveChangesAsync();
+            }
+
             await _auditService.LogAsync(AuditEventType.Approve, nameof(ExpenseRequisition), id.ToString(),
                 approverId, null, oldStatus.ToString(), req.Status.ToString(), notes, id);
+        }
+
+        public async Task MarkAsPaidAsync(int id, int userId)
+        {
+            var req = await _requisitionRepo.GetByIdAsync(id);
+            if (req == null || req.IsDeleted) throw new InvalidOperationException("Requisition not found.");
+            if (req.Status != RequisitionStatus.Approved)
+                throw new InvalidOperationException("Only approved requisitions can be marked as paid.");
+
+            // Authorization check: only Finance and Admin can mark as paid
+            var user = await _userRepo.GetByIdAsync(userId);
+            if (user == null || (user.Role != UserRole.Finance && user.Role != UserRole.Admin))
+                throw new UnauthorizedAccessException("Only Finance and Admin users can mark requisitions as paid.");
+
+            var oldStatus = req.Status;
+            req.Status = RequisitionStatus.Paid;
+            req.PaidAt = DateTime.UtcNow;
+            req.UpdatedAt = DateTime.UtcNow;
+
+            await _requisitionRepo.UpdateAsync(req);
+            await _unitOfWork.SaveChangesAsync();
+            await _auditService.LogAsync(AuditEventType.StatusChange, nameof(ExpenseRequisition), id.ToString(),
+                userId, null, oldStatus.ToString(), req.Status.ToString(), "Marked as paid", id);
+        }
+
+        public async Task<List<QuotationDto>> GetQuotationsAsync(int requisitionId)
+        {
+            var quotations = await _db.RequisitionQuotations
+                .Include(q => q.Vendor)
+                .Where(q => q.RequisitionId == requisitionId && !q.IsDeleted)
+                .OrderBy(q => q.QuotationDate)
+                .Select(q => new QuotationDto
+                {
+                    Id = q.Id,
+                    VendorId = q.VendorId,
+                    VendorName = q.Vendor != null ? q.Vendor.Name : $"Vendor #{q.VendorId}",
+                    QuotedPrice = q.QuotedPrice,
+                    QuotationDate = q.QuotationDate,
+                    IsSelected = q.IsSelected,
+                    SelectionReason = q.SelectionReason
+                })
+                .ToListAsync();
+            return quotations;
+        }
+
+        public async Task AddQuotationAsync(AddQuotationDto dto, int userId)
+        {
+            if (dto.VendorId <= 0) throw new InvalidOperationException("Please select a vendor for the quotation.");
+            if (dto.QuotedPrice <= 0) throw new InvalidOperationException("Quoted price must be greater than zero.");
+
+            var req = await _requisitionRepo.GetByIdAsync(dto.RequisitionId);
+            if (req == null || req.IsDeleted) throw new InvalidOperationException("Requisition not found.");
+            if (req.Status == RequisitionStatus.Approved || req.Status == RequisitionStatus.Paid ||
+                req.Status == RequisitionStatus.Rejected || req.Status == RequisitionStatus.Cancelled)
+                throw new InvalidOperationException("Quotations can no longer be added at this stage.");
+
+            var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.Id == dto.VendorId && !v.IsDeleted);
+            if (vendor == null) throw new InvalidOperationException("Vendor not found.");
+
+            var duplicate = await _db.RequisitionQuotations.AnyAsync(
+                q => q.RequisitionId == dto.RequisitionId && q.VendorId == dto.VendorId && !q.IsDeleted);
+            if (duplicate) throw new InvalidOperationException("A quotation for this vendor already exists.");
+
+            var quotation = new RequisitionQuotation
+            {
+                RequisitionId = dto.RequisitionId,
+                VendorId = dto.VendorId,
+                QuotedPrice = dto.QuotedPrice,
+                QuotationDate = dto.QuotationDate == default ? DateTime.Today : dto.QuotationDate,
+                IsSelected = false,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _db.RequisitionQuotations.Add(quotation);
+            await _db.SaveChangesAsync();
+
+            await _auditService.LogAsync(AuditEventType.Create, nameof(RequisitionQuotation), quotation.Id.ToString(),
+                userId, null, null, System.Text.Json.JsonSerializer.Serialize(new { quotation.Id, quotation.VendorId, quotation.QuotedPrice }),
+                "Quotation added", dto.RequisitionId);
+        }
+
+        public async Task RemoveQuotationAsync(int quotationId, int userId)
+        {
+            var quotation = await _db.RequisitionQuotations.FirstOrDefaultAsync(q => q.Id == quotationId && !q.IsDeleted);
+            if (quotation == null) throw new InvalidOperationException("Quotation not found.");
+
+            var req = await _requisitionRepo.GetByIdAsync(quotation.RequisitionId);
+            if (req == null || req.IsDeleted) throw new InvalidOperationException("Requisition not found.");
+            if (req.Status == RequisitionStatus.Approved || req.Status == RequisitionStatus.Paid)
+                throw new InvalidOperationException("Quotations cannot be removed after the requisition is approved.");
+
+            _db.RequisitionQuotations.Remove(quotation);
+            await _db.SaveChangesAsync();
+
+            await _auditService.LogAsync(AuditEventType.Delete, nameof(RequisitionQuotation), quotationId.ToString(),
+                userId, null, null, null, "Quotation removed", req.Id);
+        }
+
+        public async Task SelectQuotationAsync(int requisitionId, int quotationId, string? reason, int userId)
+        {
+            var req = await _requisitionRepo.GetByIdAsync(requisitionId);
+            if (req == null || req.IsDeleted) throw new InvalidOperationException("Requisition not found.");
+            if (req.Status == RequisitionStatus.Approved || req.Status == RequisitionStatus.Paid ||
+                req.Status == RequisitionStatus.Rejected || req.Status == RequisitionStatus.Cancelled)
+                throw new InvalidOperationException("Quotation can no longer be selected at this stage.");
+
+            var quotation = await _db.RequisitionQuotations.FirstOrDefaultAsync(q => q.Id == quotationId && q.RequisitionId == requisitionId && !q.IsDeleted);
+            if (quotation == null) throw new InvalidOperationException("Quotation not found.");
+
+            await _db.RequisitionQuotations
+                .Where(q => q.RequisitionId == requisitionId)
+                .ExecuteUpdateAsync(s => s.SetProperty(q => q.IsSelected, false));
+
+            quotation.IsSelected = true;
+            quotation.SelectionReason = reason;
+            await _db.SaveChangesAsync();
+
+            await _auditService.LogAsync(AuditEventType.Update, nameof(RequisitionQuotation), quotationId.ToString(),
+                userId, null, null, null, "Quotation selected" + (string.IsNullOrWhiteSpace(reason) ? "" : $": {reason}"), requisitionId);
         }
 
         public async Task RejectAsync(int id, int approverId, string reason)
@@ -286,6 +510,11 @@ namespace Zentic.Infrastructure.Services
             if (req.RequesterId == approverId) throw new InvalidOperationException("You cannot reject your own requisition.");
             if (req.Status != RequisitionStatus.Submitted && req.Status != RequisitionStatus.UnderReview)
                 throw new InvalidOperationException("Requisition cannot be rejected at this stage.");
+
+            // Authorization check
+            var canApprove = await CanUserApproveAsync(req, approverId);
+            if (!canApprove)
+                throw new UnauthorizedAccessException("You are not authorized to reject this requisition.");
 
             var oldStatus = req.Status;
             req.Status = RequisitionStatus.Rejected;
@@ -307,6 +536,8 @@ namespace Zentic.Infrastructure.Services
             if (req.RequesterId != userId) throw new UnauthorizedAccessException("You can only cancel your own requisition.");
             if (req.Status == RequisitionStatus.Approved || req.Status == RequisitionStatus.Paid)
                 throw new InvalidOperationException("Cannot cancel an approved or paid requisition.");
+            if (req.Status == RequisitionStatus.Submitted || req.Status == RequisitionStatus.UnderReview)
+                throw new InvalidOperationException("Cannot cancel a requisition that is already submitted for approval. Contact your approver to reject it.");
 
             var oldStatus = req.Status;
             req.Status = RequisitionStatus.Cancelled;
@@ -321,24 +552,125 @@ namespace Zentic.Infrastructure.Services
         private async Task<string> GenerateRequisitionNumberAsync()
         {
             var now = DateTime.UtcNow;
-            // Use a DB-level sequence via MAX+1 with row lock to avoid race condition
-            var maxNumber = await _db.ExpenseRequisitions
-                .Where(r => r.CreatedAt.Year == now.Year && r.CreatedAt.Month == now.Month)
-                .Select(r => r.RequisitionNumber)
-                .ToListAsync();
-
-            var count = maxNumber.Count + 1;
-            var candidate = $"EXP-{now.Year}{now.Month:D2}-{count:D4}";
-
-            // Ensure uniqueness — increment if collision exists (handles concurrent inserts)
-            while (await _db.ExpenseRequisitions
-                       .AnyAsync(r => r.RequisitionNumber == candidate))
+            var yearMonth = $"{now.Year}{now.Month:D2}";
+            
+            // Use database row-level locking to prevent race conditions
+            await _db.Database.ExecuteSqlRawAsync(
+                "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+            
+            await _db.Database.BeginTransactionAsync();
+            try
             {
-                count++;
-                candidate = $"EXP-{now.Year}{now.Month:D2}-{count:D4}";
+                // Get or create sequence for this year-month
+                var sequence = await _db.NumberSequences
+                    .FirstOrDefaultAsync(s => s.SequenceName == "ExpenseRequisition" && s.YearMonth == yearMonth);
+
+                if (sequence == null)
+                {
+                    sequence = new NumberSequence
+                    {
+                        SequenceName = "ExpenseRequisition",
+                        Prefix = "EXP",
+                        YearMonth = yearMonth,
+                        CurrentValue = 0,
+                        IncrementBy = 1,
+                        MinValue = 1,
+                        MaxValue = 9999,
+                        Cycle = false,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _db.NumberSequences.Add(sequence);
+                    await _db.SaveChangesAsync();
+                }
+
+                // Increment the sequence
+                var nextValue = sequence.CurrentValue + sequence.IncrementBy;
+                if (nextValue > sequence.MaxValue && !sequence.Cycle)
+                {
+                    throw new InvalidOperationException($"Sequence {sequence.SequenceName} for {yearMonth} has reached maximum value.");
+                }
+
+                sequence.CurrentValue = nextValue;
+                sequence.LastUsedAt = DateTime.UtcNow;
+                sequence.UpdatedAt = DateTime.UtcNow;
+
+                await _db.SaveChangesAsync();
+                await _db.Database.CommitTransactionAsync();
+
+                return $"{sequence.Prefix}-{yearMonth}-{sequence.CurrentValue:D4}";
+            }
+            catch
+            {
+                await _db.Database.RollbackTransactionAsync();
+                throw;
+            }
+        }
+
+        private async Task<bool> CanUserApproveAsync(ExpenseRequisition req, int approverId)
+        {
+            var approver = await _userRepo.GetByIdAsync(approverId);
+            if (approver == null || !approver.IsActive) return false;
+
+            var role = approver.Role;
+
+            // Admin can approve anything
+            if (role == UserRole.Admin) return true;
+
+            // Finance can approve at L2 (Finance approval stage)
+            if (role == UserRole.Finance)
+            {
+                // Finance can approve if it's at Finance approval stage
+                // For now, allow Finance to approve any submitted/under review requisition
+                // In a more complex workflow, you'd check CurrentApprovalLevel
+                return req.Status == RequisitionStatus.Submitted || req.Status == RequisitionStatus.UnderReview;
             }
 
-            return candidate;
+            // Manager can approve if they are the manager of the requester or department head
+            if (role == UserRole.Manager)
+            {
+                var requester = await _userRepo.GetByIdAsync(req.RequesterId);
+                if (requester == null) return false;
+
+                // Check if approver is the direct manager of the requester
+                if (requester.ManagerId == approverId) return true;
+
+                // Check if approver is the department head
+                if (req.DepartmentId == approver.DepartmentId)
+                {
+                    var dept = await _departmentRepo.GetByIdAsync(req.DepartmentId);
+                    if (dept?.ManagerId == approverId) return true;
+                }
+
+                // Check if approver manages the requester's department (for sub-departments)
+                if (requester.DepartmentId.HasValue)
+                {
+                    var requesterDept = await _departmentRepo.GetByIdAsync(requester.DepartmentId.Value);
+                    if (requesterDept != null)
+                    {
+                        // Check if approver is manager of any parent department
+                        var currentDept = requesterDept;
+                        while (currentDept.ParentDepartmentId.HasValue)
+                        {
+                            var parentDept = await _departmentRepo.GetByIdAsync(currentDept.ParentDepartmentId.Value);
+                            if (parentDept == null) break;
+                            if (parentDept.ManagerId == approverId) return true;
+                            currentDept = parentDept;
+                        }
+                    }
+                }
+
+                return false;
+            }
+
+            return false;
+        }
+
+        private decimal GetMultipleQuotationThreshold()
+        {
+            if (decimal.TryParse(_configuration["AppSettings:MultipleQuotationThreshold"], out var threshold) && threshold > 0)
+                return threshold;
+            return 50_000_000m;
         }
 
         private static string GetBadgeClass(RequisitionStatus status) => status switch
