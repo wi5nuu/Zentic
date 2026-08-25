@@ -25,7 +25,7 @@ namespace Zentic.Web.Controllers
             _dashboardService = dashboardService;
         }
 
-        public async Task<IActionResult> Index(string? status, string? search, string? category, int page = 1)
+        public async Task<IActionResult> Index(string? status, string? search, string? category, bool? flagged, int page = 1)
         {
             if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
                 return RedirectToAction("Login", "Auth");
@@ -36,6 +36,7 @@ namespace Zentic.Web.Controllers
                 Status = status,
                 Search = search,
                 Category = category,
+                Flagged = flagged,
                 Page = page,
                 PageSize = 10
             };
@@ -59,6 +60,7 @@ namespace Zentic.Web.Controllers
             await _auditService.LogAsync(Domain.Enums.AuditEventType.View,
                 "ExpenseRequisition", id.ToString(), userId, ip, null, null, "Viewed requisition details", id);
 
+            await PopulateDropdowns();
             return View(dto);
         }
 
@@ -179,6 +181,128 @@ namespace Zentic.Web.Controllers
                 TempData["Error"] = ex.Message;
             }
             return RedirectToAction(nameof(Index));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Policy = "CanApproveRequisition")]
+        public async Task<IActionResult> MarkAsPaid(int id)
+        {
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return RedirectToAction("Login", "Auth");
+            try
+            {
+                await _expenseService.MarkAsPaidAsync(id, userId);
+                TempData["Success"] = "Requisition marked as paid.";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = ex.Message;
+            }
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Policy = "CanApproveRequisition")]
+        public async Task<IActionResult> AddQuotation(AddQuotationDto dto)
+        {
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return RedirectToAction("Login", "Auth");
+            try
+            {
+                await _expenseService.AddQuotationAsync(dto, userId);
+                TempData["Success"] = "Quotation added.";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = ex.Message;
+            }
+            return RedirectToAction(nameof(Details), new { id = dto.RequisitionId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Policy = "CanApproveRequisition")]
+        public async Task<IActionResult> RemoveQuotation(int requisitionId, int quotationId)
+        {
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return RedirectToAction("Login", "Auth");
+            try
+            {
+                await _expenseService.RemoveQuotationAsync(quotationId, userId);
+                TempData["Success"] = "Quotation removed.";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = ex.Message;
+            }
+            return RedirectToAction(nameof(Details), new { id = requisitionId });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [Authorize(Policy = "CanApproveRequisition")]
+        public async Task<IActionResult> SelectQuotation(int requisitionId, int quotationId, string? reason)
+        {
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return RedirectToAction("Login", "Auth");
+            try
+            {
+                await _expenseService.SelectQuotationAsync(requisitionId, quotationId, reason, userId);
+                TempData["Success"] = "Quotation selected.";
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = ex.Message;
+            }
+            return RedirectToAction(nameof(Details), new { id = requisitionId });
+        }
+
+        [Authorize(Roles = "Admin,Finance")]
+        public async Task<IActionResult> Export(string? status, string? search, string? category, bool? flagged)
+        {
+            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return RedirectToAction("Login", "Auth");
+            var role = User.FindFirstValue(ClaimTypes.Role) ?? "Staff";
+
+            var filter = new ExpenseFilterDto
+            {
+                Status = status,
+                Search = search,
+                Category = category,
+                Flagged = flagged,
+                Page = 1,
+                PageSize = 10000
+            };
+
+            var result = await _expenseService.GetPagedAsync(filter, userId, role);
+            var csv = new System.Text.StringBuilder();
+            csv.AppendLine("\uFEFFRequisitionNumber,Title,Amount,Category,Status,Requester,Department,Vendor,CreatedAt,SubmittedAt,ApprovedAt,PaidAt,Flagged");
+            foreach (var r in result.Items)
+            {
+                csv.AppendLine(string.Join(",",
+                    Csv(r.RequisitionNumber), Csv(r.Title), r.Amount.ToString("0.00"),
+                    Csv(r.Category), Csv(r.Status), Csv(r.RequesterName), Csv(r.DepartmentName),
+                    Csv(r.VendorName), r.CreatedAt.ToString("yyyy-MM-dd HH:mm"),
+                    r.SubmittedAt?.ToString("yyyy-MM-dd HH:mm") ?? "",
+                    r.ApprovedAt?.ToString("yyyy-MM-dd HH:mm") ?? "",
+                    r.PaidAt?.ToString("yyyy-MM-dd HH:mm") ?? "",
+                    r.IsFlaggedForReview ? "Yes" : "No"));
+            }
+
+            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+            await _auditService.LogAsync(Domain.Enums.AuditEventType.Export, nameof(Domain.Entities.ExpenseRequisition),
+                "CSV", userId, ip, null, null, $"Exported {result.Items.Count} requisition records", null);
+
+            return File(System.Text.Encoding.UTF8.GetBytes(csv.ToString()), "text/csv",
+                $"requisitions_{DateTime.Now:yyyyMMdd_HHmm}.csv");
+        }
+
+        private static string Csv(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return "\"\"";
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
         }
 
         private async Task PopulateDropdowns()
