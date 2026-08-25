@@ -68,6 +68,13 @@
                                 <span>New Requisition</span>
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="sidebar-link @(currentController == "Delegation" ? "active" : "")"
+                               asp-controller="Delegation" asp-action="Index">
+                                <i class="bi bi-person-down"></i>
+                                <span>My Delegations</span>
+                            </a>
+                        </li>
                     }
                 </ul>
 
@@ -171,6 +178,13 @@
                                asp-controller="Department" asp-action="Index">
                                 <i class="bi bi-diagram-3"></i>
                                 <span>Departments</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="sidebar-link @(currentController == "ApprovalWorkflow" ? "active" : "")"
+                               asp-controller="ApprovalWorkflow" asp-action="Index">
+                                <i class="bi bi-diagram-2"></i>
+                                <span>Approval Workflows</span>
                             </a>
                         </li>
                     </ul>
