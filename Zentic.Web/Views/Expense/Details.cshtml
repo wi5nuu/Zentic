@@ -66,6 +66,11 @@
                         <dt class="col-sm-4 text-muted fw-normal">Approved</dt>
                         <dd class="col-sm-8">@Model.ApprovedAt.Value.ToString("dd MMM yyyy HH:mm")</dd>
                     }
+                    @if (Model.PaidAt.HasValue)
+                    {
+                        <dt class="col-sm-4 text-muted fw-normal">Paid</dt>
+                        <dd class="col-sm-8">@Model.PaidAt.Value.ToString("dd MMM yyyy HH:mm")</dd>
+                    }
                     @if (Model.RejectedAt.HasValue)
                     {
                         <dt class="col-sm-4 text-muted fw-normal">Rejected</dt>
@@ -175,5 +180,141 @@
                 </div>
             </div>
         }
+
+        @if (Model.Status == "Approved" && isFinanceOrAdmin)
+        {
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body">
+                    <form asp-action="MarkAsPaid" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('Confirm payment has been made for this requisition?')">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-success w-100"><i class="bi bi-cash-coin me-2"></i>Mark as Paid</button>
+                    </form>
+                </div>
+            </div>
+        }
     </div>
 </div>
+
+@if (isFinanceOrAdmin)
+{
+    var canManageQuotations = Model.Status == "Draft" || Model.Status == "Submitted" || Model.Status == "UnderReview";
+    <div class="card border-0 shadow-sm mt-3">
+        <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center">
+            <h6 class="fw-bold mb-0"><i class="bi bi-file-earmark-text me-2"></i>Vendor Quotations</h6>
+            <span class="text-muted small">3-way matching: quotations vs requested amount</span>
+        </div>
+        <div class="card-body">
+            @if (!Model.Quotations.Any())
+            {
+                <p class="text-muted small mb-3">No quotations recorded yet.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Vendor</th>
+                                <th>Quoted Price</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var q in Model.Quotations)
+                            {
+                                <tr>
+                                    <td class="fw-semibold small">@q.VendorName</td>
+                                    <td class="small">Rp @q.QuotedPrice.ToString("N0")</td>
+                                    <td class="small text-muted">@q.QuotationDate.ToString("dd MMM yyyy")</td>
+                                    <td>
+                                        @if (q.IsSelected)
+                                        {
+                                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Selected</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-light text-dark border">Submitted</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        @if (canManageQuotations)
+                                        {
+                                            <form asp-action="SelectQuotation" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="requisitionId" value="@Model.Id" />
+                                                <input type="hidden" name="quotationId" value="@q.Id" />
+                                                <input type="hidden" name="reason" value="" />
+                                                <button type="submit" class="btn btn-sm btn-outline-success" @(q.IsSelected ? "disabled" : "") title="Select this quotation">
+                                                    <i class="bi bi-check2"></i>
+                                                </button>
+                                            </form>
+                                            <form asp-action="RemoveQuotation" method="post" class="d-inline" onsubmit="return confirm('Remove this quotation?')">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="requisitionId" value="@Model.Id" />
+                                                <input type="hidden" name="quotationId" value="@q.Id" />
+                                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove quotation">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">—</span>
+                                        }
+                                    </td>
+                                </tr>
+                                @if (q.IsSelected && !string.IsNullOrEmpty(q.SelectionReason))
+                                {
+                                    <tr>
+                                        <td colspan="5" class="small text-muted ps-4"><i class="bi bi-chat-left-text me-1"></i>@q.SelectionReason</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (canManageQuotations)
+            {
+                <form asp-action="AddQuotation" method="post" class="row g-2 align-items-end mt-3 pt-3 border-top">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="RequisitionId" value="@Model.Id" />
+                    <div class="col-12 col-md-4">
+                        <label class="form-label fw-semibold small mb-1">Vendor</label>
+                        <select name="VendorId" class="form-select form-select-sm" required>
+                            <option value="">Select vendor...</option>
+                            @foreach (var v in ViewBag.Vendors)
+                            {
+                                <option value="@v.Value" selected="@(v.Value == Model.VendorId?.ToString())">@v.Text</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label fw-semibold small mb-1">Quoted Price (Rp)</label>
+                        <input type="number" name="QuotedPrice" class="form-control form-control-sm" step="0.01" min="1" required />
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="form-label fw-semibold small mb-1">Quotation Date</label>
+                        <input type="date" name="QuotationDate" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                    </div>
+                    <div class="col-12 col-md-2 d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary flex-fill"><i class="bi bi-plus-lg me-1"></i>Add</button>
+                    </div>
+                </form>
+                <small class="text-muted mt-2 d-block">
+                    @if (Model.Amount >= 50000000)
+                    {
+                        <i class="bi bi-info-circle me-1"></i><span>This requisition is above the quotation threshold and requires at least 2 quotations before it can be approved.</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-info-circle me-1"></i><span>Quotations are optional for requisitions below the threshold (Rp 50,000,000).</span>
+                    }
+                </small>
+            }
+        </div>
+    </div>
+}
