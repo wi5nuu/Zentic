@@ -8,5 +8,7 @@ namespace Zentic.Application.Interfaces
         string Encrypt(string plaintext);
         string Decrypt(string ciphertext);
         string MaskAccountNumber(string accountNumber);
+        string GetCurrentKeyId();
+        void RotateKey(string newBase64Key);
     }
 }
