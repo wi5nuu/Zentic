@@ -11,5 +11,10 @@ namespace Zentic.Application.Interfaces
         Task ApproveAsync(int id, int approverId, string? notes);
         Task RejectAsync(int id, int approverId, string reason);
         Task CancelAsync(int id, int userId);
+        Task MarkAsPaidAsync(int id, int userId);
+        Task<List<QuotationDto>> GetQuotationsAsync(int requisitionId);
+        Task AddQuotationAsync(AddQuotationDto dto, int userId);
+        Task RemoveQuotationAsync(int quotationId, int userId);
+        Task SelectQuotationAsync(int requisitionId, int quotationId, string? reason, int userId);
     }
 }
