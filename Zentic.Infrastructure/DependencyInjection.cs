@@ -1,4 +1,5 @@
 using Zentic.Application.Interfaces;
+using Zentic.Application.Services;
 using Zentic.Domain.Entities;
 using Zentic.Infrastructure.Data;
 using Zentic.Infrastructure.Repositories;
@@ -6,6 +7,7 @@ using Zentic.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Zentic.Infrastructure
 {
@@ -28,6 +30,15 @@ namespace Zentic.Infrastructure
             var encKey = config["Encryption:Key"] ?? Convert.ToBase64String(new byte[32]); // dev fallback only
             services.AddSingleton<IEncryptionService>(new EncryptionService(encKey));
 
+            // Password validation options
+            services.Configure<PasswordOptions>(config.GetSection("PasswordOptions"));
+
+            // Fraud detection options
+            services.Configure<FraudDetectionOptions>(config.GetSection("FraudDetectionOptions"));
+
+            // Password validator
+            services.AddScoped<IPasswordValidator, PasswordValidator>();
+
             // Application services
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAuditService, AuditService>();
@@ -35,6 +46,7 @@ namespace Zentic.Infrastructure
             services.AddScoped<IDashboardService, DashboardService>();
             services.AddScoped<IVendorService, VendorService>();
             services.AddScoped<IExpenseService, ExpenseService>();
+            services.AddScoped<IApprovalWorkflowService, ApprovalWorkflowService>();
 
             return services;
         }
