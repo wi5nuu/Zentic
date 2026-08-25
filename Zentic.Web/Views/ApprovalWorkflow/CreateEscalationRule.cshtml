@@ -1,0 +1,88 @@
+@model Zentic.Application.DTOs.CreateEscalationRuleDto
+@{
+    ViewData["Title"] = "Create Escalation Rule";
+}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 class="fw-bold mb-0"><i class="bi bi-arrow-up-right-circle me-2 text-warning"></i>Create Escalation Rule</h4>
+        <p class="text-muted small mb-0">Eskalasi otomatis untuk approval yang tertunda</p>
+    </div>
+    <a asp-action="EscalationRules" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a>
+</div>
+
+<div class="card border-0 shadow-sm" style="max-width:720px;">
+    <div class="card-body p-4">
+        <form asp-action="CreateEscalationRule" method="post">
+            @Html.AntiForgeryToken()
+            <div asp-validation-summary="ModelOnly" class="text-danger small mb-3"></div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
+                <input asp-for="Name" class="form-control" required />
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Description</label>
+                <textarea asp-for="Description" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-semibold">Trigger</label>
+                    <select asp-for="Trigger" asp-items="Html.GetEnumSelectList<Zentic.Domain.Enums.EscalationTrigger>()" class="form-select"></select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-semibold">Escalate After (hours)</label>
+                    <input asp-for="EscalationAfterHours" type="number" min="1" class="form-control" required />
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-semibold">Escalate To User</label>
+                    <select asp-for="EscalateToUserId" asp-items="ViewBag.Users" class="form-select">
+                        <option value="">— None —</option>
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-semibold">Or Escalate To Role</label>
+                    <select asp-for="EscalateToRole" asp-items="ViewBag.Roles" class="form-select">
+                        <option value="">— None —</option>
+                    </select>
+                    <div class="form-text">Isi minimal salah satu: user atau role.</div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label fw-semibold">Department (optional)</label>
+                    <select asp-for="DepartmentId" asp-items="ViewBag.Departments" class="form-select">
+                        <option value="">— All departments —</option>
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label fw-semibold">Min Amount</label>
+                    <input asp-for="MinAmount" type="number" step="0.01" min="0" class="form-control" />
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label class="form-label fw-semibold">Max Amount</label>
+                    <input asp-for="MaxAmount" type="number" step="0.01" min="0" class="form-control" />
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Custom Message</label>
+                <textarea asp-for="CustomMessage" class="form-control" rows="2" placeholder="Pesan tambahan saat eskalasi terjadi..."></textarea>
+            </div>
+
+            <div class="d-flex flex-wrap gap-3 mb-3">
+                <div class="form-check form-switch">
+                    <input asp-for="NotifyOriginalApprover" class="form-check-input" checked />
+                    <label asp-for="NotifyOriginalApprover" class="form-check-label">Notify original approver</label>
+                </div>
+                <div class="form-check form-switch">
+                    <input asp-for="NotifyEscalationTarget" class="form-check-input" checked />
+                    <label asp-for="NotifyEscalationTarget" class="form-check-label">Notify escalation target</label>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mt-4">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Create Rule</button>
+                <a asp-action="EscalationRules" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
