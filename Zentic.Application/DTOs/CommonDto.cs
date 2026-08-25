@@ -9,9 +9,16 @@ namespace Zentic.Application.DTOs
         public string Email { get; set; } = string.Empty;
         public string EmployeeId { get; set; } = string.Empty;
         public string? Position { get; set; }
+        public string? PhoneNumber { get; set; }
         public string Role { get; set; } = string.Empty;
         public string? DepartmentName { get; set; }
         public int? DepartmentId { get; set; }
+        public bool IsActive { get; set; }
+        public int? ManagerId { get; set; }
+        public string? ManagerName { get; set; }
+        public bool EmailVerified { get; set; }
+        public bool IsLocked { get; set; }
+        public DateTime? LastLoginAt { get; set; }
     }
 
     public class AuthResultDto
@@ -116,5 +123,13 @@ namespace Zentic.Application.DTOs
         public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
         public bool HasPreviousPage => Page > 1;
         public bool HasNextPage => Page < TotalPages;
+    }
+
+    public class MfaSetupDto
+    {
+        public string SecretKey { get; set; } = string.Empty;
+        public string QrCodeUri { get; set; } = string.Empty;
+        public List<string> BackupCodes { get; set; } = new();
+        public string ManualEntryKey { get; set; } = string.Empty;
     }
 }
