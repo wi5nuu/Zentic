@@ -142,11 +142,15 @@ namespace Zentic.Infrastructure.Services
 
                 notification.IsSent = true;
                 notification.SentAt = DateTime.UtcNow;
+                notification.RetryCount = 0;
+                notification.ErrorMessage = null;
             }
             catch (Exception ex)
             {
                 notification.RetryCount++;
                 notification.ErrorMessage = ex.Message;
+                notification.IsSent = false;
+                notification.SentAt = null;
             }
 
             await _db.SaveChangesAsync();
@@ -244,7 +248,7 @@ namespace Zentic.Infrastructure.Services
                     .ThenInclude(d => d!.Manager)
                 .FirstOrDefaultAsync(b => b.Id == budgetId);
 
-            if (budget?.Department?.Manager == null) return;
+            if (budget?.Department?.Manager == null || budget.Department.ManagerId == null) return;
 
             await CreateAsync(new CreateNotificationDto
             {
@@ -252,7 +256,7 @@ namespace Zentic.Infrastructure.Services
                 Message = $"Budget {budget.BudgetCode} has reached {utilizationPercentage:N2}% utilization. Please review.",
                 Type = NotificationType.InApp,
                 Priority = NotificationPriority.Urgent,
-                RecipientId = budget.Department.ManagerId!.Value,
+                RecipientId = budget.Department.ManagerId.Value,
                 EntityType = nameof(BudgetAllocation),
                 EntityId = budgetId.ToString(),
                 ActionUrl = $"/Budget/Details/{budgetId}"
