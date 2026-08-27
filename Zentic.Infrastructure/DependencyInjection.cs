@@ -55,9 +55,18 @@ namespace Zentic.Infrastructure
         {
             using var scope = services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            // EnsureCreated creates the schema from the current model if it doesn't exist.
-            // This avoids the PendingModelChangesWarning that occurs when no migrations exist.
-            await db.Database.EnsureCreatedAsync();
+            // Apply pending migrations (requires migrations to be created first)
+            // For development without migrations, use EnsureCreatedAsync
+            var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
+            if (pendingMigrations.Any())
+            {
+                await db.Database.MigrateAsync();
+            }
+            else
+            {
+                // No migrations - create schema from model (development only)
+                await db.Database.EnsureCreatedAsync();
+            }
         }
     }
 }
