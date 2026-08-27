@@ -140,16 +140,28 @@ namespace Zentic.Infrastructure.Services
 
         private async Task<List<int>> GetSubordinateIdsAsync(int managerId)
         {
-            var subordinates = await _db.Users
-                .Where(u => u.ManagerId == managerId && !u.IsDeleted)
-                .Select(u => u.Id)
-                .ToListAsync();
+            var allSubordinates = new List<int>();
+            var visited = new HashSet<int>();
+            var queue = new Queue<int>();
+            queue.Enqueue(managerId);
+            visited.Add(managerId);
 
-            var allSubordinates = new List<int>(subordinates);
-            foreach (var subId in subordinates)
+            while (queue.Count > 0)
             {
-                var subSubordinates = await GetSubordinateIdsAsync(subId);
-                allSubordinates.AddRange(subSubordinates);
+                var currentId = queue.Dequeue();
+                var subordinates = await _db.Users
+                    .Where(u => u.ManagerId == currentId && !u.IsDeleted)
+                    .Select(u => u.Id)
+                    .ToListAsync();
+
+                foreach (var subId in subordinates)
+                {
+                    if (visited.Add(subId))
+                    {
+                        allSubordinates.Add(subId);
+                        queue.Enqueue(subId);
+                    }
+                }
             }
 
             return allSubordinates;
@@ -288,7 +300,7 @@ namespace Zentic.Infrastructure.Services
                     UpdatedAt = DateTime.UtcNow
                 };
                 _db.ConflictOfInterestDeclarations.Add(declaration);
-                await _db.SaveChangesAsync();
+                await _unitOfWork.SaveChangesAsync();
             }
 
             await _auditService.LogAsync(AuditEventType.Create, nameof(ExpenseRequisition), created.Id.ToString(),
@@ -553,12 +565,8 @@ namespace Zentic.Infrastructure.Services
         {
             var now = DateTime.UtcNow;
             var yearMonth = $"{now.Year}{now.Month:D2}";
-            
-            // Use database row-level locking to prevent race conditions
-            await _db.Database.ExecuteSqlRawAsync(
-                "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
-            
-            await _db.Database.BeginTransactionAsync();
+
+            await _unitOfWork.BeginTransactionAsync();
             try
             {
                 // Get or create sequence for this year-month
@@ -581,7 +589,7 @@ namespace Zentic.Infrastructure.Services
                         UpdatedAt = DateTime.UtcNow
                     };
                     _db.NumberSequences.Add(sequence);
-                    await _db.SaveChangesAsync();
+                    await _unitOfWork.SaveChangesAsync();
                 }
 
                 // Increment the sequence
@@ -595,14 +603,14 @@ namespace Zentic.Infrastructure.Services
                 sequence.LastUsedAt = DateTime.UtcNow;
                 sequence.UpdatedAt = DateTime.UtcNow;
 
-                await _db.SaveChangesAsync();
-                await _db.Database.CommitTransactionAsync();
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitAsync();
 
                 return $"{sequence.Prefix}-{yearMonth}-{sequence.CurrentValue:D4}";
             }
             catch
             {
-                await _db.Database.RollbackTransactionAsync();
+                await _unitOfWork.RollbackAsync();
                 throw;
             }
         }
