@@ -52,7 +52,8 @@ namespace Zentic.Infrastructure.Services
             else
             {
                 // Dummy BCrypt verify with valid hash format to prevent timing attack
-                BCrypt.Net.BCrypt.Verify(password, "$2a$11$dummyhashdummyhashdummyhashdu");
+                // Valid bcrypt hash: $2a$11$<22-char-salt><31-char-hash>
+                BCrypt.Net.BCrypt.Verify(password, "$2a$11$dummySaltDummySaltDummySa.57Pj5oGf9kZqVxVYq3Ym1W8nKL2mP");
             }
 
             // Check if user exists and password is valid
