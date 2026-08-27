@@ -72,7 +72,9 @@ namespace Zentic.Domain.Enums
         DocumentDelete = 18,
         BudgetExceeded = 19,
         PaymentProcessed = 20,
-        NotificationSent = 21
+        NotificationSent = 21,
+        MfaEnabled = 22,
+        MfaDisabled = 23
     }
 
     public enum DocumentType
