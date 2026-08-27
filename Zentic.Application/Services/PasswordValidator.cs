@@ -110,9 +110,7 @@ namespace Zentic.Application.Services
         {
             var result = Validate(password);
             
-            var historyHashes = passwordHistory.Select(h => BCrypt.Net.BCrypt.HashPassword(h, 11)).ToList();
-            
-            foreach (var historyHash in historyHashes)
+            foreach (var historyHash in passwordHistory)
             {
                 if (BCrypt.Net.BCrypt.Verify(password, historyHash))
                 {
@@ -147,16 +145,29 @@ namespace Zentic.Application.Services
         {
             for (int i = 0; i <= password.Length - maxSequential; i++)
             {
-                bool isSequential = true;
+                // Check ascending sequence (e.g., abc, 123)
+                bool isAscending = true;
                 for (int j = 1; j < maxSequential; j++)
                 {
                     if (password[i + j] - password[i + j - 1] != 1)
                     {
-                        isSequential = false;
+                        isAscending = false;
                         break;
                     }
                 }
-                if (isSequential) return true;
+                if (isAscending) return true;
+
+                // Check descending sequence (e.g., cba, 321)
+                bool isDescending = true;
+                for (int j = 1; j < maxSequential; j++)
+                {
+                    if (password[i + j - 1] - password[i + j] != 1)
+                    {
+                        isDescending = false;
+                        break;
+                    }
+                }
+                if (isDescending) return true;
             }
             return false;
         }
