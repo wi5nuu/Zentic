@@ -23,9 +23,27 @@ namespace Zentic.Infrastructure.Services
             var vendors = await _db.Vendors
                 .Where(v => v.Status == VendorStatus.Active && !v.IsDeleted)
                 .OrderBy(v => v.Name)
+                .Select(v => new VendorDto
+                {
+                    Id = v.Id,
+                    Name = v.Name,
+                    Code = v.Code,
+                    Address = v.Address,
+                    PhoneNumber = v.PhoneNumber,
+                    Email = v.Email,
+                    TaxId = v.TaxId,
+                    Status = v.Status.ToString(),
+                    BankName = v.BankName,
+                    BankAccountHolderName = v.BankAccountHolderName,
+                    MaskedAccountNumber = v.BankAccountNumber != null
+                        ? _encryption.MaskEncryptedAccountNumber(v.BankAccountNumber)
+                        : null,
+                    VerifiedByName = null,
+                    VerifiedAt = v.VerifiedAt
+                })
                 .ToListAsync();
 
-            return vendors.Select(v => MapToDto(v)).ToList();
+            return vendors;
         }
 
         public async Task<List<VendorDto>> GetAllVendorsAsync()
@@ -34,9 +52,27 @@ namespace Zentic.Infrastructure.Services
                 .Include(v => v.VerifiedBy)
                 .Where(v => !v.IsDeleted)
                 .OrderBy(v => v.Name)
+                .Select(v => new VendorDto
+                {
+                    Id = v.Id,
+                    Name = v.Name,
+                    Code = v.Code,
+                    Address = v.Address,
+                    PhoneNumber = v.PhoneNumber,
+                    Email = v.Email,
+                    TaxId = v.TaxId,
+                    Status = v.Status.ToString(),
+                    BankName = v.BankName,
+                    BankAccountHolderName = v.BankAccountHolderName,
+                    MaskedAccountNumber = v.BankAccountNumber != null
+                        ? _encryption.MaskEncryptedAccountNumber(v.BankAccountNumber)
+                        : null,
+                    VerifiedByName = v.VerifiedBy != null ? v.VerifiedBy.FullName : null,
+                    VerifiedAt = v.VerifiedAt
+                })
                 .ToListAsync();
 
-            return vendors.Select(v => MapToDto(v, v.VerifiedBy?.FullName)).ToList();
+            return vendors;
         }
 
         public async Task<VendorDto?> GetByIdAsync(int id)
@@ -46,7 +82,7 @@ namespace Zentic.Infrastructure.Services
                 .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
             if (v == null) return null;
 
-            return MapToDto(v, v.VerifiedBy?.FullName);
+            return MapToDto(v, v.VerifiedBy?.FullName, includeMaskedAccount: true);
         }
 
         public async Task<VendorDto> CreateAsync(CreateVendorDto dto, int createdByUserId)
@@ -74,7 +110,7 @@ namespace Zentic.Infrastructure.Services
 
             _db.Vendors.Add(vendor);
             await _db.SaveChangesAsync();
-            return MapToDto(vendor);
+            return MapToDto(vendor, includeMaskedAccount: true);
         }
 
         public async Task<VendorDto> UpdateAsync(int id, CreateVendorDto dto, int updatedByUserId)
@@ -99,7 +135,7 @@ namespace Zentic.Infrastructure.Services
 
             vendor.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
-            return MapToDto(vendor);
+            return MapToDto(vendor, includeMaskedAccount: true);
         }
 
         public async Task VerifyAsync(int id, int verifiedByUserId)
@@ -134,7 +170,7 @@ namespace Zentic.Infrastructure.Services
 
         // ── helpers ──────────────────────────────────────────────────────────
 
-        private VendorDto MapToDto(Vendor v, string? verifiedByName = null) => new VendorDto
+        private VendorDto MapToDto(Vendor v, string? verifiedByName = null, bool includeMaskedAccount = false) => new VendorDto
         {
             Id = v.Id,
             Name = v.Name,
@@ -146,9 +182,9 @@ namespace Zentic.Infrastructure.Services
             Status = v.Status.ToString(),
             BankName = v.BankName,
             BankAccountHolderName = v.BankAccountHolderName,
-            MaskedAccountNumber = v.BankAccountNumber != null
+            MaskedAccountNumber = includeMaskedAccount && v.BankAccountNumber != null
                 ? _encryption.MaskAccountNumber(_encryption.Decrypt(v.BankAccountNumber))
-                : null,
+                : (v.BankAccountNumber != null ? _encryption.MaskAccountNumber(v.BankAccountNumber) : null),
             VerifiedByName = verifiedByName,
             VerifiedAt = v.VerifiedAt
         };

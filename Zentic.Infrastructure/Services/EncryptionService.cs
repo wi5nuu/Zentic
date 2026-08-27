@@ -112,6 +112,22 @@ namespace Zentic.Infrastructure.Services
             return new string('*', accountNumber.Length - 4) + accountNumber[^4..];
         }
 
+        /// <summary>
+        /// Masks an encrypted account number (Base64) without decrypting it.
+        /// Used for list views where decryption is not needed.
+        /// </summary>
+        public string MaskEncryptedAccountNumber(string encryptedAccountNumber)
+        {
+            if (string.IsNullOrEmpty(encryptedAccountNumber))
+                return "****";
+
+            // Encrypted data is Base64, mask most of it
+            if (encryptedAccountNumber.Length <= 8)
+                return "****";
+
+            return new string('*', encryptedAccountNumber.Length - 8) + encryptedAccountNumber[^8..];
+        }
+
         public string GetCurrentKeyId() => _currentKeyId;
 
         public void RotateKey(string newBase64Key)
