@@ -12,63 +12,75 @@ namespace Zentic.Infrastructure.Services
         private readonly AppDbContext _db;
         private readonly IAuditService _auditService;
         private readonly INotificationService _notificationService;
+        private readonly IUnitOfWork _unitOfWork;
 
-        public ApprovalWorkflowService(AppDbContext db, IAuditService auditService, INotificationService notificationService)
+        public ApprovalWorkflowService(AppDbContext db, IAuditService auditService, INotificationService notificationService, IUnitOfWork unitOfWork)
         {
             _db = db;
             _auditService = auditService;
             _notificationService = notificationService;
+            _unitOfWork = unitOfWork;
         }
 
         public async Task<ApprovalWorkflowDto> CreateWorkflowAsync(CreateApprovalWorkflowDto dto, int createdById)
         {
-            var workflow = new ApprovalWorkflow
+            await _unitOfWork.BeginTransactionAsync();
+            try
             {
-                Name = dto.Name,
-                Description = dto.Description,
-                DepartmentId = dto.DepartmentId,
-                Category = dto.Category,
-                MinAmount = dto.MinAmount,
-                MaxAmount = dto.MaxAmount,
-                Priority = dto.Priority,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _db.ApprovalWorkflows.Add(workflow);
-            await _db.SaveChangesAsync();
-
-            // Add steps
-            for (int i = 0; i < dto.Steps.Count; i++)
-            {
-                var stepDto = dto.Steps[i];
-                var step = new ApprovalStep
+                var workflow = new ApprovalWorkflow
                 {
-                    WorkflowId = workflow.Id,
-                    StepOrder = i + 1,
-                    Name = stepDto.Name,
-                    Description = stepDto.Description,
-                    ApproverType = stepDto.ApproverType,
-                    SpecificUserId = stepDto.SpecificUserId,
-                    RequiredRole = stepDto.RequiredRole,
-                    DepartmentId = stepDto.DepartmentId,
-                    AllowDelegation = stepDto.AllowDelegation,
-                    RequireAllApprovers = stepDto.RequireAllApprovers,
-                    EscalationRuleId = stepDto.EscalationRuleId,
-                    IsParallel = stepDto.IsParallel,
+                    Name = dto.Name,
+                    Description = dto.Description,
+                    DepartmentId = dto.DepartmentId,
+                    Category = dto.Category,
+                    MinAmount = dto.MinAmount,
+                    MaxAmount = dto.MaxAmount,
+                    Priority = dto.Priority,
+                    IsActive = true,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
-                _db.ApprovalSteps.Add(step);
+
+                _db.ApprovalWorkflows.Add(workflow);
+                await _unitOfWork.SaveChangesAsync();
+
+                // Add steps
+                for (int i = 0; i < dto.Steps.Count; i++)
+                {
+                    var stepDto = dto.Steps[i];
+                    var step = new ApprovalStep
+                    {
+                        WorkflowId = workflow.Id,
+                        StepOrder = i + 1,
+                        Name = stepDto.Name,
+                        Description = stepDto.Description,
+                        ApproverType = stepDto.ApproverType,
+                        SpecificUserId = stepDto.SpecificUserId,
+                        RequiredRole = stepDto.RequiredRole,
+                        DepartmentId = stepDto.DepartmentId,
+                        AllowDelegation = stepDto.AllowDelegation,
+                        RequireAllApprovers = stepDto.RequireAllApprovers,
+                        EscalationRuleId = stepDto.EscalationRuleId,
+                        IsParallel = stepDto.IsParallel,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _db.ApprovalSteps.Add(step);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitAsync();
+
+                await _auditService.LogAsync(AuditEventType.Create, nameof(ApprovalWorkflow), workflow.Id.ToString(),
+                    createdById, null, null, System.Text.Json.JsonSerializer.Serialize(new { workflow.Id, workflow.Name }), "Approval workflow created", null);
+
+                return (await GetWorkflowByIdAsync(workflow.Id))!;
             }
-
-            await _db.SaveChangesAsync();
-
-            await _auditService.LogAsync(AuditEventType.Create, nameof(ApprovalWorkflow), workflow.Id.ToString(),
-                createdById, null, null, System.Text.Json.JsonSerializer.Serialize(new { workflow.Id, workflow.Name }), "Approval workflow created", null);
-
-            return (await GetWorkflowByIdAsync(workflow.Id))!;
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<ApprovalWorkflowDto?> GetWorkflowByIdAsync(int id)
@@ -113,177 +125,226 @@ namespace Zentic.Infrastructure.Services
 
         public async Task<ApprovalWorkflowDto> UpdateWorkflowAsync(int id, CreateApprovalWorkflowDto dto, int updatedById)
         {
-            var workflow = await _db.ApprovalWorkflows
-                .Include(w => w.Steps)
-                .FirstOrDefaultAsync(w => w.Id == id && !w.IsDeleted);
-
-            if (workflow == null) throw new InvalidOperationException("Workflow not found.");
-
-            workflow.Name = dto.Name;
-            workflow.Description = dto.Description;
-            workflow.DepartmentId = dto.DepartmentId;
-            workflow.Category = dto.Category;
-            workflow.MinAmount = dto.MinAmount;
-            workflow.MaxAmount = dto.MaxAmount;
-            workflow.Priority = dto.Priority;
-            workflow.UpdatedAt = DateTime.UtcNow;
-
-            // Remove existing steps
-            _db.ApprovalSteps.RemoveRange(workflow.Steps);
-
-            // Add new steps
-            for (int i = 0; i < dto.Steps.Count; i++)
+            await _unitOfWork.BeginTransactionAsync();
+            try
             {
-                var stepDto = dto.Steps[i];
-                var step = new ApprovalStep
+                var workflow = await _db.ApprovalWorkflows
+                    .Include(w => w.Steps)
+                    .FirstOrDefaultAsync(w => w.Id == id && !w.IsDeleted);
+
+                if (workflow == null) throw new InvalidOperationException("Workflow not found.");
+
+                workflow.Name = dto.Name;
+                workflow.Description = dto.Description;
+                workflow.DepartmentId = dto.DepartmentId;
+                workflow.Category = dto.Category;
+                workflow.MinAmount = dto.MinAmount;
+                workflow.MaxAmount = dto.MaxAmount;
+                workflow.Priority = dto.Priority;
+                workflow.UpdatedAt = DateTime.UtcNow;
+
+                // Remove existing steps
+                _db.ApprovalSteps.RemoveRange(workflow.Steps);
+
+                // Add new steps
+                for (int i = 0; i < dto.Steps.Count; i++)
                 {
-                    WorkflowId = workflow.Id,
-                    StepOrder = i + 1,
-                    Name = stepDto.Name,
-                    Description = stepDto.Description,
-                    ApproverType = stepDto.ApproverType,
-                    SpecificUserId = stepDto.SpecificUserId,
-                    RequiredRole = stepDto.RequiredRole,
-                    DepartmentId = stepDto.DepartmentId,
-                    AllowDelegation = stepDto.AllowDelegation,
-                    RequireAllApprovers = stepDto.RequireAllApprovers,
-                    EscalationRuleId = stepDto.EscalationRuleId,
-                    IsParallel = stepDto.IsParallel,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                _db.ApprovalSteps.Add(step);
+                    var stepDto = dto.Steps[i];
+                    var step = new ApprovalStep
+                    {
+                        WorkflowId = workflow.Id,
+                        StepOrder = i + 1,
+                        Name = stepDto.Name,
+                        Description = stepDto.Description,
+                        ApproverType = stepDto.ApproverType,
+                        SpecificUserId = stepDto.SpecificUserId,
+                        RequiredRole = stepDto.RequiredRole,
+                        DepartmentId = stepDto.DepartmentId,
+                        AllowDelegation = stepDto.AllowDelegation,
+                        RequireAllApprovers = stepDto.RequireAllApprovers,
+                        EscalationRuleId = stepDto.EscalationRuleId,
+                        IsParallel = stepDto.IsParallel,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _db.ApprovalSteps.Add(step);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitAsync();
+
+                await _auditService.LogAsync(AuditEventType.Update, nameof(ApprovalWorkflow), workflow.Id.ToString(),
+                    updatedById, null, null, System.Text.Json.JsonSerializer.Serialize(new { workflow.Id, workflow.Name }), "Approval workflow updated", null);
+
+                return (await GetWorkflowByIdAsync(workflow.Id))!;
             }
-
-            await _db.SaveChangesAsync();
-
-            await _auditService.LogAsync(AuditEventType.Update, nameof(ApprovalWorkflow), workflow.Id.ToString(),
-                updatedById, null, null, System.Text.Json.JsonSerializer.Serialize(new { workflow.Id, workflow.Name }), "Approval workflow updated", null);
-
-            return (await GetWorkflowByIdAsync(workflow.Id))!;
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<bool> DeleteWorkflowAsync(int id, int deletedById)
         {
-            var workflow = await _db.ApprovalWorkflows.FindAsync(id);
-            if (workflow == null) return false;
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var workflow = await _db.ApprovalWorkflows.FindAsync(id);
+                if (workflow == null) return false;
 
-            workflow.IsDeleted = true;
-            workflow.DeletedAt = DateTime.UtcNow;
-            workflow.UpdatedAt = DateTime.UtcNow;
+                workflow.IsDeleted = true;
+                workflow.DeletedAt = DateTime.UtcNow;
+                workflow.UpdatedAt = DateTime.UtcNow;
 
-            await _db.SaveChangesAsync();
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitAsync();
 
-            await _auditService.LogAsync(AuditEventType.Delete, nameof(ApprovalWorkflow), id.ToString(),
-                deletedById, null, null, null, "Approval workflow deleted", null);
+                await _auditService.LogAsync(AuditEventType.Delete, nameof(ApprovalWorkflow), id.ToString(),
+                    deletedById, null, null, null, "Approval workflow deleted", null);
 
-            return true;
+                return true;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<EscalationRuleDto> CreateEscalationRuleAsync(CreateEscalationRuleDto dto, int createdById)
         {
-            var rule = new EscalationRule
+            await _unitOfWork.BeginTransactionAsync();
+            try
             {
-                Name = dto.Name,
-                Description = dto.Description,
-                EscalationAfterHours = dto.EscalationAfterHours,
-                Trigger = dto.Trigger,
-                EscalateToUserId = dto.EscalateToUserId,
-                EscalateToRole = dto.EscalateToRole,
-                DepartmentId = dto.DepartmentId,
-                MinAmount = dto.MinAmount,
-                MaxAmount = dto.MaxAmount,
-                IsActive = true,
-                NotifyOriginalApprover = dto.NotifyOriginalApprover,
-                NotifyEscalationTarget = dto.NotifyEscalationTarget,
-                CustomMessage = dto.CustomMessage,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+                var rule = new EscalationRule
+                {
+                    Name = dto.Name,
+                    Description = dto.Description,
+                    EscalationAfterHours = dto.EscalationAfterHours,
+                    Trigger = dto.Trigger,
+                    EscalateToUserId = dto.EscalateToUserId,
+                    EscalateToRole = dto.EscalateToRole,
+                    DepartmentId = dto.DepartmentId,
+                    MinAmount = dto.MinAmount,
+                    MaxAmount = dto.MaxAmount,
+                    IsActive = true,
+                    NotifyOriginalApprover = dto.NotifyOriginalApprover,
+                    NotifyEscalationTarget = dto.NotifyEscalationTarget,
+                    CustomMessage = dto.CustomMessage,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
 
-            _db.EscalationRules.Add(rule);
-            await _db.SaveChangesAsync();
+                _db.EscalationRules.Add(rule);
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitAsync();
 
-            await _auditService.LogAsync(AuditEventType.Create, nameof(EscalationRule), rule.Id.ToString(),
-                createdById, null, null, System.Text.Json.JsonSerializer.Serialize(new { rule.Id, rule.Name }), "Escalation rule created", null);
+                await _auditService.LogAsync(AuditEventType.Create, nameof(EscalationRule), rule.Id.ToString(),
+                    createdById, null, null, System.Text.Json.JsonSerializer.Serialize(new { rule.Id, rule.Name }), "Escalation rule created", null);
 
-            return MapToDto(rule);
+                return MapToDto(rule);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<ApprovalDelegationDto> CreateDelegationAsync(CreateApprovalDelegationDto dto, int delegatorId)
         {
-            // Validate delegator exists
-            var delegator = await _db.Users.FindAsync(delegatorId);
-            if (delegator == null) throw new InvalidOperationException("Delegator not found.");
-
-            // Validate delegate exists
-            var delegateUser = await _db.Users.FindAsync(dto.DelegateId);
-            if (delegateUser == null) throw new InvalidOperationException("Delegate user not found.");
-
-            // Check for overlapping delegation
-            var existing = await _db.ApprovalDelegations
-                .FirstOrDefaultAsync(d => d.DelegatorId == delegatorId
-                    && d.DelegateId == dto.DelegateId
-                    && d.IsActive
-                    && d.StartDate <= dto.EndDate
-                    && d.EndDate >= dto.StartDate
-                    && !d.IsDeleted);
-
-            if (existing != null)
-                throw new InvalidOperationException("An active delegation already exists for this period.");
-
-            var delegation = new ApprovalDelegation
+            await _unitOfWork.BeginTransactionAsync();
+            try
             {
-                DelegatorId = delegatorId,
-                DelegateId = dto.DelegateId,
-                StartDate = dto.StartDate,
-                EndDate = dto.EndDate,
-                Reason = dto.Reason,
-                DepartmentId = dto.DepartmentId,
-                MaxAmount = dto.MaxAmount,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+                // Validate delegator exists
+                var delegator = await _db.Users.FindAsync(delegatorId);
+                if (delegator == null) throw new InvalidOperationException("Delegator not found.");
 
-            _db.ApprovalDelegations.Add(delegation);
-            await _db.SaveChangesAsync();
+                // Validate delegate exists
+                var delegateUser = await _db.Users.FindAsync(dto.DelegateId);
+                if (delegateUser == null) throw new InvalidOperationException("Delegate user not found.");
 
-            await _auditService.LogAsync(AuditEventType.Create, nameof(ApprovalDelegation), delegation.Id.ToString(),
-                delegatorId, null, null, System.Text.Json.JsonSerializer.Serialize(new { delegation.Id, delegation.DelegatorId, delegation.DelegateId }), "Approval delegation created", null);
+                // Check for overlapping delegation for this delegator
+                var existing = await _db.ApprovalDelegations
+                    .FirstOrDefaultAsync(d => d.DelegatorId == delegatorId
+                        && d.IsActive
+                        && d.StartDate <= dto.EndDate
+                        && d.EndDate >= dto.StartDate
+                        && !d.IsDeleted);
 
-            // Notify delegate
-            await _notificationService.CreateAsync(new CreateNotificationDto
+                if (existing != null)
+                    throw new InvalidOperationException("An active delegation already exists for this period.");
+
+                var delegation = new ApprovalDelegation
+                {
+                    DelegatorId = delegatorId,
+                    DelegateId = dto.DelegateId,
+                    StartDate = dto.StartDate,
+                    EndDate = dto.EndDate,
+                    Reason = dto.Reason,
+                    DepartmentId = dto.DepartmentId,
+                    MaxAmount = dto.MaxAmount,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _db.ApprovalDelegations.Add(delegation);
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitAsync();
+
+                await _auditService.LogAsync(AuditEventType.Create, nameof(ApprovalDelegation), delegation.Id.ToString(),
+                    delegatorId, null, null, System.Text.Json.JsonSerializer.Serialize(new { delegation.Id, delegation.DelegatorId, delegation.DelegateId }), "Approval delegation created", null);
+
+                // Notify delegate
+                await _notificationService.CreateAsync(new CreateNotificationDto
+                {
+                    Title = "Approval Delegation Assigned",
+                    Message = $"You have been assigned as an approval delegate by {delegator.FullName} from {dto.StartDate:yyyy-MM-dd} to {dto.EndDate:yyyy-MM-dd}.",
+                    Type = NotificationType.InApp,
+                    Priority = NotificationPriority.Normal,
+                    RecipientId = dto.DelegateId,
+                    EntityType = nameof(ApprovalDelegation),
+                    EntityId = delegation.Id.ToString(),
+                    ActionUrl = $"/Approval/Delegations/{delegation.Id}"
+                }, 0);
+
+                return MapToDto(delegation);
+            }
+            catch
             {
-                Title = "Approval Delegation Assigned",
-                Message = $"You have been assigned as an approval delegate by {delegator.FullName} from {dto.StartDate:yyyy-MM-dd} to {dto.EndDate:yyyy-MM-dd}.",
-                Type = NotificationType.InApp,
-                Priority = NotificationPriority.Normal,
-                RecipientId = dto.DelegateId,
-                EntityType = nameof(ApprovalDelegation),
-                EntityId = delegation.Id.ToString(),
-                ActionUrl = $"/Approval/Delegations/{delegation.Id}"
-            }, 0);
-
-            return MapToDto(delegation);
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<bool> RevokeDelegationAsync(int delegationId, int delegatorId)
         {
-            var delegation = await _db.ApprovalDelegations
-                .FirstOrDefaultAsync(d => d.Id == delegationId && d.DelegatorId == delegatorId && !d.IsDeleted);
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var delegation = await _db.ApprovalDelegations
+                    .FirstOrDefaultAsync(d => d.Id == delegationId && d.DelegatorId == delegatorId && !d.IsDeleted);
 
-            if (delegation == null) return false;
+                if (delegation == null) return false;
 
-            delegation.IsActive = false;
-            delegation.UpdatedAt = DateTime.UtcNow;
+                delegation.IsActive = false;
+                delegation.UpdatedAt = DateTime.UtcNow;
 
-            await _db.SaveChangesAsync();
+                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.CommitAsync();
 
-            await _auditService.LogAsync(AuditEventType.Delete, nameof(ApprovalDelegation), delegationId.ToString(),
-                delegatorId, null, null, null, "Approval delegation revoked", null);
+                await _auditService.LogAsync(AuditEventType.Delete, nameof(ApprovalDelegation), delegationId.ToString(),
+                    delegatorId, null, null, null, "Approval delegation revoked", null);
 
-            return true;
+                return true;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<List<ApprovalDelegationDto>> GetActiveDelegationsAsync(int userId)
