@@ -5,7 +5,9 @@ using Zentic.Infrastructure.Repositories;
 using Zentic.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Moq;
 using Xunit;
 
 namespace Zentic.Tests.UnitTests
@@ -27,13 +29,14 @@ namespace Zentic.Tests.UnitTests
                 .Build();
 
             var fraudOptions = Options.Create(new FraudDetectionOptions());
+            var auditLogger = new Mock<ILogger<AuditService>>().Object;
             
             var service = new ExpenseService(
                 new Repository<ExpenseRequisition>(db),
                 new Repository<AppUser>(db),
                 new Repository<Department>(db),
                 new FraudDetectionService(db, fraudOptions),
-                new AuditService(db),
+                new AuditService(db, auditLogger),
                 db,
                 db,
                 config);

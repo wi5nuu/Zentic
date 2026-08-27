@@ -7,6 +7,7 @@ using Zentic.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Zentic.Infrastructure
@@ -47,6 +48,10 @@ namespace Zentic.Infrastructure
             services.AddScoped<IVendorService, VendorService>();
             services.AddScoped<IExpenseService, ExpenseService>();
             services.AddScoped<IApprovalWorkflowService, ApprovalWorkflowService>();
+            services.AddScoped<INotificationService, NotificationService>();
+
+            // Hosted service for audit log flushing
+            services.AddHostedService(sp => (IHostedService)sp.GetRequiredService<IAuditService>());
 
             return services;
         }
