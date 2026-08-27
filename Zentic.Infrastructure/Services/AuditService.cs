@@ -10,6 +10,7 @@ namespace Zentic.Infrastructure.Services
     public class AuditService : IAuditService
     {
         private readonly AppDbContext _db;
+        private readonly List<AuditLog> _pendingLogs = new();
 
         public AuditService(AppDbContext db)
         {
@@ -36,12 +37,30 @@ namespace Zentic.Infrastructure.Services
                 RequisitionId = requisitionId
             };
 
-            await _db.AuditLogs.AddAsync(log);
-            await _db.SaveChangesAsync();
+            _pendingLogs.Add(log);
+            
+            // Flush periodically or when batch size reached
+            if (_pendingLogs.Count >= 50)
+            {
+                await FlushAsync();
+            }
+        }
+
+        public async Task FlushAsync()
+        {
+            if (_pendingLogs.Count > 0)
+            {
+                await _db.AuditLogs.AddRangeAsync(_pendingLogs);
+                await _db.SaveChangesAsync();
+                _pendingLogs.Clear();
+            }
         }
 
         public async Task<PaginatedResult<AuditLogDto>> GetPagedAsync(AuditFilterDto filter)
         {
+            // Flush any pending logs before querying
+            await FlushAsync();
+
             var query = _db.AuditLogs
                 .Include(a => a.User)
                 .AsQueryable();
