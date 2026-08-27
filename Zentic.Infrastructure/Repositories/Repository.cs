@@ -17,22 +17,20 @@ namespace Zentic.Infrastructure.Repositories
         }
 
         public async Task<T?> GetByIdAsync(int id) =>
-            await _set.FirstOrDefaultAsync(e => e.Id == id);
+            await _set.FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted);
 
         public async Task<List<T>> GetAllAsync() =>
-            await _set.ToListAsync();
+            await _set.Where(e => !e.IsDeleted).ToListAsync();
 
         public async Task<T> AddAsync(T entity)
         {
             await _set.AddAsync(entity);
-            await _db.SaveChangesAsync();
             return entity;
         }
 
         public async Task UpdateAsync(T entity)
         {
             _set.Update(entity);
-            await _db.SaveChangesAsync();
         }
 
         public async Task SoftDeleteAsync(int id)
@@ -43,10 +41,9 @@ namespace Zentic.Infrastructure.Repositories
                 entity.IsDeleted = true;
                 entity.DeletedAt = DateTime.UtcNow;
                 _set.Update(entity);
-                await _db.SaveChangesAsync();
             }
         }
 
-        public IQueryable<T> Query() => _set.AsQueryable();
+        public IQueryable<T> Query() => _set.Where(e => !e.IsDeleted).AsQueryable();
     }
 }
