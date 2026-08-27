@@ -17,10 +17,13 @@ namespace Zentic.Infrastructure.Services
         private const string KeyIdPrefix = "ZENC";
         
         private readonly Dictionary<string, byte[]> _keys = new();
-        private readonly string _currentKeyId;
+        private string _currentKeyId;
 
         public EncryptionService(string base64Key)
         {
+            if (string.IsNullOrWhiteSpace(base64Key))
+                throw new ArgumentException("Encryption key cannot be empty.", nameof(base64Key));
+
             var keyBytes = Convert.FromBase64String(base64Key);
             ValidateKey(keyBytes);
             
@@ -137,7 +140,17 @@ namespace Zentic.Infrastructure.Services
 
             var newKeyId = DeriveKeyId(newKeyBytes);
             _keys[newKeyId] = newKeyBytes;
+            _currentKeyId = newKeyId; // New encryptions will use the new key
             // Note: In production, persist key rotation to a secure key store
+        }
+
+        /// <summary>
+        /// Re-encrypts data with the current key. Useful for migrating legacy data after key rotation.
+        /// </summary>
+        public string ReEncrypt(string ciphertext)
+        {
+            var plaintext = Decrypt(ciphertext);
+            return Encrypt(plaintext);
         }
 
         private static void ValidateKey(byte[] key)

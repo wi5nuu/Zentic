@@ -11,5 +11,6 @@ namespace Zentic.Application.Interfaces
         string MaskEncryptedAccountNumber(string encryptedAccountNumber);
         string GetCurrentKeyId();
         void RotateKey(string newBase64Key);
+        string ReEncrypt(string ciphertext);
     }
 }

@@ -500,8 +500,14 @@ namespace Zentic.Infrastructure.Services
             };
         }
 
-        private async Task<bool> IsUserApproverForStepAsync(ApprovalStep step, int userId, ExpenseRequisition requisition)
+        private async Task<bool> IsUserApproverForStepAsync(ApprovalStep step, int userId, ExpenseRequisition requisition, int depth = 0)
         {
+            const int MaxDelegationDepth = 5;
+            if (depth > MaxDelegationDepth)
+            {
+                return false; // Prevent infinite recursion
+            }
+
             var user = await _db.Users.FindAsync(userId);
             if (user == null) return false;
 
@@ -518,8 +524,8 @@ namespace Zentic.Infrastructure.Services
 
             if (delegation != null)
             {
-                // Check if delegator is an approver for this step
-                return await IsUserApproverForStepAsync(step, delegation.DelegatorId, requisition);
+                // Check if delegator is an approver for this step (with incremented depth)
+                return await IsUserApproverForStepAsync(step, delegation.DelegatorId, requisition, depth + 1);
             }
 
             // Check based on approver type
