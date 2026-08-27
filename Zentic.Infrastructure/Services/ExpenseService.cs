@@ -42,10 +42,6 @@ namespace Zentic.Infrastructure.Services
         public async Task<PaginatedResult<ExpenseRequisitionDto>> GetPagedAsync(ExpenseFilterDto filter, int userId, string role)
         {
             var query = _requisitionRepo.Query()
-                .Include(r => r.Requester).ThenInclude(u => u!.Department)
-                .Include(r => r.Department)
-                .Include(r => r.Approver)
-                .Include(r => r.Vendor)
                 .Where(r => !r.IsDeleted);
 
             // Role-based filtering
@@ -86,10 +82,10 @@ namespace Zentic.Infrastructure.Services
                     SubmittedAt = r.SubmittedAt,
                     ApprovedAt = r.ApprovedAt,
                     PaidAt = r.PaidAt,
-                    RequesterName = r.Requester!.FullName,
-                    RequesterEmail = r.Requester!.Email,
+                    RequesterName = r.Requester != null ? r.Requester.FullName : "Unknown",
+                    RequesterEmail = r.Requester != null ? r.Requester.Email : "",
                     ApproverName = r.Approver != null ? r.Approver.FullName : null,
-                    DepartmentName = r.Department!.Name,
+                    DepartmentName = r.Department != null ? r.Department.Name : "Unknown",
                     VendorName = r.Vendor != null ? r.Vendor.Name : null
                 })
                 .ToListAsync();
