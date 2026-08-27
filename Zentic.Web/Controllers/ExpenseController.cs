@@ -273,7 +273,7 @@ namespace Zentic.Web.Controllers
                 Category = category,
                 Flagged = flagged,
                 Page = 1,
-                PageSize = 10000
+                PageSize = 5000
             };
 
             var result = await _expenseService.GetPagedAsync(filter, userId, role);
@@ -296,7 +296,7 @@ namespace Zentic.Web.Controllers
                 "CSV", userId, ip, null, null, $"Exported {result.Items.Count} requisition records", null);
 
             return File(System.Text.Encoding.UTF8.GetBytes(csv.ToString()), "text/csv",
-                $"requisitions_{DateTime.Now:yyyyMMdd_HHmm}.csv");
+                $"requisitions_{DateTime.UtcNow:yyyyMMdd_HHmm}.csv");
         }
 
         private static string Csv(string? value)
