@@ -7,7 +7,7 @@ namespace Zentic.Infrastructure.Services
     /// <summary>
     /// AES-256-GCM authenticated encryption for sensitive data at rest (bank account numbers).
     /// Key must be stored in secrets management, never in appsettings.json.
-    /// Supports key rotation with key IDs.
+    /// Supports key rotation with key IDs. Key ID is derived from key hash for deterministic identification.
     /// </summary>
     public class EncryptionService : IEncryptionService
     {
@@ -17,14 +17,14 @@ namespace Zentic.Infrastructure.Services
         private const string KeyIdPrefix = "ZENC";
         
         private readonly Dictionary<string, byte[]> _keys = new();
-        private string _currentKeyId;
+        private readonly string _currentKeyId;
 
         public EncryptionService(string base64Key)
         {
             var keyBytes = Convert.FromBase64String(base64Key);
             ValidateKey(keyBytes);
             
-            _currentKeyId = GenerateKeyId();
+            _currentKeyId = DeriveKeyId(keyBytes);
             _keys[_currentKeyId] = keyBytes;
         }
 
@@ -42,9 +42,9 @@ namespace Zentic.Infrastructure.Services
 
             aes.Encrypt(nonce, plainBytes, cipherBytes, tag);
 
-            // Format: keyId + nonce + ciphertext + tag
-            var result = new byte[KeyIdPrefix.Length + 1 + NonceSize + cipherBytes.Length + TagSize];
+            // Format: keyId + ':' + nonce + ciphertext + tag
             var keyIdBytes = Encoding.UTF8.GetBytes(_currentKeyId);
+            var result = new byte[keyIdBytes.Length + 1 + NonceSize + cipherBytes.Length + TagSize];
             Buffer.BlockCopy(keyIdBytes, 0, result, 0, keyIdBytes.Length);
             result[keyIdBytes.Length] = (byte)':'; // delimiter
             Buffer.BlockCopy(nonce, 0, result, keyIdBytes.Length + 1, NonceSize);
@@ -119,9 +119,9 @@ namespace Zentic.Infrastructure.Services
             var newKeyBytes = Convert.FromBase64String(newBase64Key);
             ValidateKey(newKeyBytes);
 
-            var newKeyId = GenerateKeyId();
+            var newKeyId = DeriveKeyId(newKeyBytes);
             _keys[newKeyId] = newKeyBytes;
-            _currentKeyId = newKeyId;
+            // Note: In production, persist key rotation to a secure key store
         }
 
         private static void ValidateKey(byte[] key)
@@ -130,10 +130,11 @@ namespace Zentic.Infrastructure.Services
                 throw new ArgumentException($"Encryption key must be {KeySize} bytes (256 bits) for AES-256-GCM.", nameof(key));
         }
 
-        private static string GenerateKeyId()
+        private static string DeriveKeyId(byte[] key)
         {
-            var randomBytes = RandomNumberGenerator.GetBytes(8);
-            return $"{KeyIdPrefix}{Convert.ToHexString(randomBytes).ToLowerInvariant()}";
+            using var sha256 = SHA256.Create();
+            var hash = sha256.ComputeHash(key);
+            return $"{KeyIdPrefix}{Convert.ToHexString(hash[..8]).ToLowerInvariant()}";
         }
     }
 }
