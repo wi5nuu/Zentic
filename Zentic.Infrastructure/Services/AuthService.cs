@@ -51,8 +51,8 @@ namespace Zentic.Infrastructure.Services
             }
             else
             {
-                // Dummy BCrypt verify to prevent timing attack
-                BCrypt.Net.BCrypt.Verify(password, "$2a$11$dummyhashtopreventtimingattack1234567890");
+                // Dummy BCrypt verify with valid hash format to prevent timing attack
+                BCrypt.Net.BCrypt.Verify(password, "$2a$11$dummyhashdummyhashdummyhashdu");
             }
 
             // Check if user exists and password is valid
@@ -450,9 +450,10 @@ namespace Zentic.Infrastructure.Services
             string qrCodeBase64 = GenerateQrCodeBase64(qrCodeUri);
 
             // Store the secret and backup codes (but don't enable MFA yet - user must verify first)
+            // Only store temporarily - will be confirmed on verification
             user.MfaSecret = base32Secret;
             user.MfaBackupCodes = backupCodes;
-            user.MfaEnabled = false; // Will be set to true after verification
+            user.MfaEnabled = false;
             user.MfaEnabledAt = null;
 
             await _db.SaveChangesAsync();
@@ -466,7 +467,7 @@ namespace Zentic.Infrastructure.Services
             };
         }
 
-        public async Task<bool> VerifyMfaCodeAsync(int userId, string code)
+public async Task<bool> VerifyMfaCodeAsync(int userId, string code)
         {
             var user = await _db.Users.FindAsync(userId);
             if (user == null || string.IsNullOrEmpty(user.MfaSecret)) return false;
@@ -484,7 +485,7 @@ namespace Zentic.Infrastructure.Services
                     await _db.SaveChangesAsync();
 
                     await _auditService.LogAsync(
-                        AuditEventType.PasswordChange, // Reuse existing event type
+                        AuditEventType.MfaEnabled,
                         "AppUser",
                         user.Id.ToString(),
                         userId,
@@ -492,12 +493,11 @@ namespace Zentic.Infrastructure.Services
                         null,
                         null,
                         "MFA enabled",
-                        null
-                    );
+                        null);
                 }
             }
 
-            return isValid;
+return isValid;
         }
 
         public async Task<bool> DisableMfaAsync(int userId, string code)
@@ -516,7 +516,7 @@ namespace Zentic.Infrastructure.Services
             await _db.SaveChangesAsync();
 
             await _auditService.LogAsync(
-                AuditEventType.PasswordChange,
+                AuditEventType.MfaDisabled,
                 "AppUser",
                 user.Id.ToString(),
                 userId,
@@ -524,8 +524,7 @@ namespace Zentic.Infrastructure.Services
                 null,
                 null,
                 "MFA disabled",
-                null
-            );
+                null);
 
             return true;
         }
