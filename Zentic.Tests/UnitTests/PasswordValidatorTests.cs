@@ -126,9 +126,9 @@ namespace Zentic.Tests.UnitTests
         {
             var validator = new PasswordValidator(Relaxed());
             var previous = "Older#Passw0rd!";
-            var historyPlaintexts = new[] { previous };
+            var historyHashes = new[] { BCrypt.Net.BCrypt.HashPassword(previous, 11) };
 
-            var result = validator.ValidateWithHistory(previous, historyPlaintexts);
+            var result = validator.ValidateWithHistory(previous, historyHashes);
 
             Assert.False(result.IsValid);
             Assert.Contains(result.Errors, e => e.Contains("used recently"));
@@ -138,13 +138,13 @@ namespace Zentic.Tests.UnitTests
         public void ValidateWithHistory_UniquePassword_ReturnsValid()
         {
             var validator = new PasswordValidator(Relaxed());
-            var historyPlaintexts = new[]
+            var historyHashes = new[]
             {
-                "Older#Passw0rd!",
-                "Even0lder!Pass#"
+                BCrypt.Net.BCrypt.HashPassword("Older#Passw0rd!", 11),
+                BCrypt.Net.BCrypt.HashPassword("Even0lder!Pass#", 11)
             };
 
-            var result = validator.ValidateWithHistory("Br4nd!New#Secret", historyPlaintexts);
+            var result = validator.ValidateWithHistory("Br4nd!New#Secret", historyHashes);
 
             Assert.True(result.IsValid);
         }
