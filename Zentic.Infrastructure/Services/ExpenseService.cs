@@ -565,54 +565,69 @@ namespace Zentic.Infrastructure.Services
         {
             var now = DateTime.UtcNow;
             var yearMonth = $"{now.Year}{now.Month:D2}";
+            const int maxRetries = 3;
 
-            await _unitOfWork.BeginTransactionAsync();
-            try
+            for (int attempt = 0; attempt < maxRetries; attempt++)
             {
-                // Get or create sequence for this year-month
-                var sequence = await _db.NumberSequences
-                    .FirstOrDefaultAsync(s => s.SequenceName == "ExpenseRequisition" && s.YearMonth == yearMonth);
-
-                if (sequence == null)
+                await _unitOfWork.BeginTransactionAsync();
+                try
                 {
-                    sequence = new NumberSequence
+                    // Use SELECT FOR UPDATE equivalent with EF Core - lock the row for update
+                    var sequence = await _db.NumberSequences
+                        .FromSqlRaw(
+                            "SELECT * FROM NumberSequences WITH (UPDLOCK, ROWLOCK) WHERE SequenceName = {0} AND YearMonth = {1}",
+                            "ExpenseRequisition", yearMonth)
+                        .FirstOrDefaultAsync();
+
+                    if (sequence == null)
                     {
-                        SequenceName = "ExpenseRequisition",
-                        Prefix = "EXP",
-                        YearMonth = yearMonth,
-                        CurrentValue = 0,
-                        IncrementBy = 1,
-                        MinValue = 1,
-                        MaxValue = 9999,
-                        Cycle = false,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
-                    };
-                    _db.NumberSequences.Add(sequence);
+                        sequence = new NumberSequence
+                        {
+                            SequenceName = "ExpenseRequisition",
+                            Prefix = "EXP",
+                            YearMonth = yearMonth,
+                            CurrentValue = 0,
+                            IncrementBy = 1,
+                            MinValue = 1,
+                            MaxValue = 9999,
+                            Cycle = false,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                        _db.NumberSequences.Add(sequence);
+                        await _unitOfWork.SaveChangesAsync();
+                    }
+
+                    // Increment the sequence
+                    var nextValue = sequence.CurrentValue + sequence.IncrementBy;
+                    if (nextValue > sequence.MaxValue && !sequence.Cycle)
+                    {
+                        throw new InvalidOperationException($"Sequence {sequence.SequenceName} for {yearMonth} has reached maximum value.");
+                    }
+
+                    sequence.CurrentValue = nextValue;
+                    sequence.LastUsedAt = DateTime.UtcNow;
+                    sequence.UpdatedAt = DateTime.UtcNow;
+
                     await _unitOfWork.SaveChangesAsync();
-                }
+                    await _unitOfWork.CommitAsync();
 
-                // Increment the sequence
-                var nextValue = sequence.CurrentValue + sequence.IncrementBy;
-                if (nextValue > sequence.MaxValue && !sequence.Cycle)
+                    return $"{sequence.Prefix}-{yearMonth}-{sequence.CurrentValue:D4}";
+                }
+                catch (DbUpdateConcurrencyException) when (attempt < maxRetries - 1)
                 {
-                    throw new InvalidOperationException($"Sequence {sequence.SequenceName} for {yearMonth} has reached maximum value.");
+                    await _unitOfWork.RollbackAsync();
+                    // Retry on concurrency conflict
+                    await Task.Delay(Random.Shared.Next(50, 150));
                 }
-
-                sequence.CurrentValue = nextValue;
-                sequence.LastUsedAt = DateTime.UtcNow;
-                sequence.UpdatedAt = DateTime.UtcNow;
-
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
-
-                return $"{sequence.Prefix}-{yearMonth}-{sequence.CurrentValue:D4}";
+                catch
+                {
+                    await _unitOfWork.RollbackAsync();
+                    throw;
+                }
             }
-            catch
-            {
-                await _unitOfWork.RollbackAsync();
-                throw;
-            }
+
+            throw new InvalidOperationException("Failed to generate requisition number after maximum retries due to concurrency conflicts.");
         }
 
         private async Task<bool> CanUserApproveAsync(ExpenseRequisition req, int approverId)
