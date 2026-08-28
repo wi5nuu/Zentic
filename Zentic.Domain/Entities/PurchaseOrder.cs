@@ -61,7 +61,7 @@ namespace Zentic.Domain.Entities
         public decimal LineTotal { get; set; }
 
         public int QuantityReceived { get; set; } = 0;
-        public bool IsFullyReceived => QuantityReceived >= Quantity;
+        public bool IsFullyReceived => Quantity > 0 && QuantityReceived >= Quantity;
     }
 
     public class GoodsReceipt : BaseEntity
