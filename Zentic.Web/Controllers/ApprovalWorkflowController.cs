@@ -186,6 +186,11 @@ namespace Zentic.Web.Controllers
                         ModelState.AddModelError($"Steps[{i}].DepartmentId", $"Step {i + 1}: select a department.");
                         break;
                 }
+
+                if (step.EscalationRuleId.HasValue && step.EscalationRuleId.Value > 0)
+                {
+                    // Note: Actual existence check would require async DB call, validated in service
+                }
             }
         }
 
