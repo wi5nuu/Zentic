@@ -120,6 +120,16 @@ namespace Zentic.Web.Controllers
             if (!dto.Steps.Any())
                 ModelState.AddModelError("Steps", "At least one approval step is required.");
 
+            if (dto.DepartmentId.HasValue)
+            {
+                var dept = await _deptRepo.GetByIdAsync(dto.DepartmentId.Value);
+                if (dept == null || !dept.IsActive)
+                    ModelState.AddModelError("DepartmentId", "Selected department not found or inactive.");
+            }
+
+            if (dto.Category.HasValue && !Enum.IsDefined(typeof(ExpenseCategory), dto.Category.Value))
+                ModelState.AddModelError("Category", "Invalid expense category.");
+
             ValidateSteps(dto.Steps);
 
             if (!ModelState.IsValid)
