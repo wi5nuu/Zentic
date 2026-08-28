@@ -2,6 +2,7 @@ using Zentic.Application.DTOs;
 using Zentic.Application.Interfaces;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
+using Zentic.Infrastructure.Helpers;
 using Microsoft.EntityFrameworkCore;
 using System.Threading;
 
@@ -56,7 +57,7 @@ namespace Zentic.Infrastructure.Services
                     Title = r.Title,
                     Amount = r.Amount,
                     Status = r.Status.ToString(),
-                    StatusBadgeClass = GetBadgeClass(r.Status),
+                    StatusBadgeClass = BadgeHelper.GetBadgeClass(r.Status),
                     IsFlagged = r.IsFlaggedForReview,
                     CreatedAt = r.CreatedAt,
                     RequesterName = r.Requester != null ? r.Requester.FullName : "Unknown"
@@ -87,17 +88,5 @@ namespace Zentic.Infrastructure.Services
                 CategoryBreakdown = categoryBreakdown
             };
         }
-
-        private static string GetBadgeClass(RequisitionStatus status) => status switch
-        {
-            RequisitionStatus.Draft => "badge bg-secondary",
-            RequisitionStatus.Submitted => "badge bg-primary",
-            RequisitionStatus.UnderReview => "badge bg-warning text-dark",
-            RequisitionStatus.Approved => "badge bg-success",
-            RequisitionStatus.Rejected => "badge bg-danger",
-            RequisitionStatus.Cancelled => "badge bg-dark",
-            RequisitionStatus.Paid => "badge bg-info text-dark",
-            _ => "badge bg-secondary"
-        };
     }
 }

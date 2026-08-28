@@ -3,6 +3,7 @@ using Zentic.Application.Interfaces;
 using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
+using Zentic.Infrastructure.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using System.Threading;
@@ -75,7 +76,7 @@ namespace Zentic.Infrastructure.Services
                     Amount = r.Amount,
                     Category = r.Category.ToString(),
                     Status = r.Status.ToString(),
-                    StatusBadgeClass = GetBadgeClass(r.Status),
+                    StatusBadgeClass = BadgeHelper.GetBadgeClass(r.Status),
                     IsFlaggedForReview = r.IsFlaggedForReview,
                     FlagReason = r.FlagReason,
                     PriceDeviation = r.PriceDeviation,
@@ -191,7 +192,7 @@ namespace Zentic.Infrastructure.Services
                 Amount = req.Amount,
                 Category = req.Category.ToString(),
                 Status = req.Status.ToString(),
-                StatusBadgeClass = GetBadgeClass(req.Status),
+                StatusBadgeClass = BadgeHelper.GetBadgeClass(req.Status),
                 IsFlaggedForReview = req.IsFlaggedForReview,
                 FlagReason = req.FlagReason,
                 PriceDeviation = req.PriceDeviation,
@@ -312,7 +313,7 @@ namespace Zentic.Infrastructure.Services
                 Amount = created.Amount,
                 Category = created.Category.ToString(),
                 Status = created.Status.ToString(),
-                StatusBadgeClass = GetBadgeClass(created.Status),
+                StatusBadgeClass = BadgeHelper.GetBadgeClass(created.Status),
                 IsFlaggedForReview = created.IsFlaggedForReview,
                 FlagReason = created.FlagReason,
                 CreatedAt = created.CreatedAt,
@@ -692,17 +693,5 @@ namespace Zentic.Infrastructure.Services
                 return threshold;
             return 50_000_000m;
         }
-
-        private static string GetBadgeClass(RequisitionStatus status) => status switch
-        {
-            RequisitionStatus.Draft => "badge bg-secondary",
-            RequisitionStatus.Submitted => "badge bg-primary",
-            RequisitionStatus.UnderReview => "badge bg-warning text-dark",
-            RequisitionStatus.Approved => "badge bg-success",
-            RequisitionStatus.Rejected => "badge bg-danger",
-            RequisitionStatus.Cancelled => "badge bg-dark",
-            RequisitionStatus.Paid => "badge bg-info text-dark",
-            _ => "badge bg-secondary"
-        };
     }
 }

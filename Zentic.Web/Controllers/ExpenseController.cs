@@ -273,7 +273,7 @@ namespace Zentic.Web.Controllers
                 Category = category,
                 Flagged = flagged,
                 Page = 1,
-                PageSize = 5000
+                PageSize = 2000
             };
 
             var result = await _expenseService.GetPagedAsync(filter, userId, role);

@@ -185,7 +185,7 @@ namespace Zentic.Infrastructure.Services
             BankAccountHolderName = v.BankAccountHolderName,
             MaskedAccountNumber = includeMaskedAccount && v.BankAccountNumber != null
                 ? _encryption.MaskAccountNumber(_encryption.Decrypt(v.BankAccountNumber))
-                : (v.BankAccountNumber != null ? _encryption.MaskAccountNumber(v.BankAccountNumber) : null),
+                : (v.BankAccountNumber != null ? "***" : null),
             VerifiedByName = verifiedByName,
             VerifiedAt = v.VerifiedAt
         };

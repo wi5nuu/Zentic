@@ -5,6 +5,7 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OtpNet;
 using QRCoder;
@@ -20,6 +21,7 @@ namespace Zentic.Infrastructure.Services
         private readonly IAuditService _auditService;
         private readonly IPasswordValidator _passwordValidator;
         private readonly PasswordOptions _passwordOptions;
+        private readonly ILogger<AuthService> _logger;
 
         // Account lockout configuration
         private const int MaxFailedAttempts = 5;
@@ -29,12 +31,14 @@ namespace Zentic.Infrastructure.Services
             AppDbContext db, 
             IAuditService auditService,
             IPasswordValidator passwordValidator,
-            IOptions<PasswordOptions> passwordOptions)
+            IOptions<PasswordOptions> passwordOptions,
+            ILogger<AuthService> logger)
         {
             _db = db;
             _auditService = auditService;
             _passwordValidator = passwordValidator;
             _passwordOptions = passwordOptions.Value;
+            _logger = logger;
         }
 
         public async Task<AuthResultDto?> LoginAsync(string email, string password, string? ipAddress, CancellationToken cancellationToken = default)
@@ -168,9 +172,9 @@ namespace Zentic.Infrastructure.Services
                     cancellationToken
                 );
             }
-            catch
+            catch (Exception ex)
             {
-                // Non-critical - don't block login if audit fails
+                _logger.LogWarning(ex, "Failed to write audit log for login of user {UserId}", user.Id);
             }
 
             return new AuthResultDto
