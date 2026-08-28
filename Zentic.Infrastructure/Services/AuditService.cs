@@ -4,12 +4,11 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Zentic.Infrastructure.Services
 {
-    public class AuditService : IAuditService, IHostedService, IDisposable
+    public class AuditService : IAuditService, IDisposable
     {
         private readonly AppDbContext _db;
         private readonly ILogger<AuditService> _logger;
@@ -128,13 +127,12 @@ namespace Zentic.Infrastructure.Services
             };
         }
 
-        public Task StartAsync(CancellationToken cancellationToken)
+        public void StartFlushTimer()
         {
             _flushTimer = new Timer(async _ => await FlushAsync(), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
-            return Task.CompletedTask;
         }
 
-        public async Task StopAsync(CancellationToken cancellationToken)
+        public async Task StopFlushTimerAsync(CancellationToken cancellationToken = default)
         {
             _flushTimer?.Change(Timeout.Infinite, 0);
             await FlushAsync(cancellationToken);

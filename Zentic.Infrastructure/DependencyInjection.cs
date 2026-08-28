@@ -50,8 +50,8 @@ namespace Zentic.Infrastructure
             services.AddScoped<IApprovalWorkflowService, ApprovalWorkflowService>();
             services.AddScoped<INotificationService, NotificationService>();
 
-            // Hosted service for audit log flushing
-            services.AddHostedService(sp => (IHostedService)sp.GetRequiredService<IAuditService>());
+            // Hosted service for audit log flushing (uses scoped IAuditService via IServiceScopeFactory)
+            services.AddHostedService<AuditFlushHostedService>();
 
             return services;
         }
