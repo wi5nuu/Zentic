@@ -87,6 +87,13 @@ namespace Zentic.Web.Controllers
             var user = await _userRepo.GetByIdAsync(id);
             if (user == null) return NotFound();
 
+            var currentUserId = GetCurrentUserId();
+
+            if (currentUserId == id && user.Role != model.Role)
+            {
+                ModelState.AddModelError("Role", "You cannot change your own role.");
+            }
+
             if (await _userRepo.Query().AnyAsync(u => u.Email.ToLower() == model.Email.ToLower() && u.Id != id))
                 ModelState.AddModelError("Email", "Email already in use.");
             if (await _userRepo.Query().AnyAsync(u => u.EmployeeId == model.EmployeeId && u.Id != id))
