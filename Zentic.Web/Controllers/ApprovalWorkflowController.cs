@@ -37,6 +37,9 @@ namespace Zentic.Web.Controllers
         {
             var workflow = await _workflowService.GetWorkflowByIdAsync(id);
             if (workflow == null) return NotFound();
+
+            await LogAuditAsync(AuditEventType.View, "ApprovalWorkflow", id.ToString(), $"Viewed workflow {workflow.Name}");
+
             return View(workflow);
         }
 
