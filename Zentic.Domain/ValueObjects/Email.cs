@@ -33,7 +33,14 @@ namespace Zentic.Domain.ValueObjects
             return EmailRegex.IsMatch(value.Trim());
         }
 
-        public string Domain => Value.Split('@')[1];
+        public string Domain
+        {
+            get
+            {
+                var at = Value.IndexOf('@');
+                return at < 0 ? string.Empty : Value.Substring(at + 1);
+            }
+        }
 
         public override string ToString() => Value;
 
