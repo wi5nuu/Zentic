@@ -257,7 +257,10 @@ namespace Zentic.Web.Controllers
         {
             if (string.IsNullOrEmpty(value)) return "\"\"";
             var sanitized = value.Replace("\"", "\"\"");
-            if (sanitized.Length > 0 && sanitized[0] is '=' or '+' or '-' or '@' or '\t' or '\r' or '\n')
+            // Replace newlines with spaces to avoid breaking CSV rows
+            sanitized = sanitized.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ");
+            // Prevent CSV formula injection: if value starts with =, +, -, @, tab, prepend '
+            if (sanitized.Length > 0 && sanitized[0] is '=' or '+' or '-' or '@' or '\t')
                 sanitized = "'" + sanitized;
             return "\"" + sanitized + "\"";
         }
