@@ -465,7 +465,7 @@ namespace Zentic.Infrastructure.Services
                 RequisitionId = dto.RequisitionId,
                 VendorId = dto.VendorId,
                 QuotedPrice = dto.QuotedPrice,
-                QuotationDate = dto.QuotationDate == default ? DateTime.Today : dto.QuotationDate,
+                QuotationDate = dto.QuotationDate == default ? DateTime.UtcNow.Date : dto.QuotationDate,
                 IsSelected = false,
                 CreatedAt = now,
                 UpdatedAt = now
