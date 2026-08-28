@@ -174,6 +174,13 @@ namespace Zentic.Web.Controllers
             if (dto.EscalateToUserId == null && dto.EscalateToRole == null)
                 ModelState.AddModelError("EscalateToUserId", "Specify an escalation target user or role.");
 
+            if (dto.EscalateToUserId.HasValue)
+            {
+                var user = await _userRepo.GetByIdAsync(dto.EscalateToUserId.Value);
+                if (user == null || !user.IsActive)
+                    ModelState.AddModelError("EscalateToUserId", "Escalation target user not found or inactive.");
+            }
+
             if (!ModelState.IsValid)
             {
                 await PopulateDropdowns();
