@@ -166,6 +166,8 @@ namespace Zentic.Infrastructure.Services
 
             if (vendor.Status == VendorStatus.Blacklisted)
                 throw new InvalidOperationException("Blacklisted vendors cannot be suspended.");
+            if (vendor.Status == VendorStatus.PendingVerification)
+                throw new InvalidOperationException("Pending verification vendors cannot be suspended. Verify first.");
 
             vendor.Status = vendor.Status == VendorStatus.Suspended
                 ? VendorStatus.Active   // toggle: re-activate
