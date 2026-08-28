@@ -35,6 +35,13 @@ namespace Zentic.Web.Controllers
             throw new InvalidOperationException("User not authenticated.");
         }
 
+        protected int? TryGetCurrentUserId()
+        {
+            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
+                return id;
+            return null;
+        }
+
         protected async Task LogAuditAsync(Domain.Enums.AuditEventType eventType, string entity, string entityId, string notes)
         {
             if (_auditService == null) return;

@@ -25,9 +25,9 @@ namespace Zentic.Web.Controllers
 
         public async Task<IActionResult> Index(string? status, string? search, string? category, bool? flagged, int page = 1)
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
-            var role = User.FindFirstValue(ClaimTypes.Role) ?? "Staff";
+            var userId = TryGetCurrentUserId();
+            if (userId == null) return RedirectToAction("Login", "Auth");
+            var role = User.FindFirstValue(System.Security.Claims.ClaimTypes.Role) ?? "Staff";
 
             var filter = new ExpenseFilterDto
             {
@@ -39,24 +39,22 @@ namespace Zentic.Web.Controllers
                 PageSize = 10
             };
 
-            var result = await _expenseService.GetPagedAsync(filter, userId, role);
+            var result = await _expenseService.GetPagedAsync(filter, userId.Value, role);
             ViewBag.Filter = filter;
             return View(result);
         }
 
         public async Task<IActionResult> Details(int id)
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
-            var role = User.FindFirstValue(ClaimTypes.Role) ?? "Staff";
-            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+            var userId = TryGetCurrentUserId();
+            if (userId == null) return RedirectToAction("Login", "Auth");
+            var role = User.FindFirstValue(System.Security.Claims.ClaimTypes.Role) ?? "Staff";
 
-            var dto = await _expenseService.GetByIdAsync(id, userId, role);
+            var dto = await _expenseService.GetByIdAsync(id, userId.Value, role);
             if (dto == null) return NotFound();
 
-            // Audit: log view of requisition details
-            await _auditService.LogAsync(Domain.Enums.AuditEventType.View,
-                "ExpenseRequisition", id.ToString(), userId, ip, null, null, "Viewed requisition details", id);
+            await LogAuditAsync(Domain.Enums.AuditEventType.View,
+                "ExpenseRequisition", id.ToString(), "Viewed requisition details");
 
             await PopulateDropdowns();
             return View(dto);
@@ -85,12 +83,12 @@ namespace Zentic.Web.Controllers
                 return View(model);
             }
 
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
+            var userId = TryGetCurrentUserId();
+            if (userId == null) return RedirectToAction("Login", "Auth");
 
             try
             {
-                var result = await _expenseService.CreateAsync(model, userId);
+                var result = await _expenseService.CreateAsync(model, userId.Value);
                 TempData["Success"] = $"Requisition {result.RequisitionNumber} created.{(result.IsFlaggedForReview ? " ⚠ Flagged for review: " + result.FlagReason : "")}";
                 return RedirectToAction(nameof(Details), new { id = result.Id });
             }
@@ -106,18 +104,11 @@ namespace Zentic.Web.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Submit(int id)
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
-            try
+            return await ExecuteAndRedirect(async userId =>
             {
                 await _expenseService.SubmitAsync(id, userId);
                 TempData["Success"] = "Requisition submitted for approval.";
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = ex.Message;
-            }
-            return RedirectToAction(nameof(Details), new { id });
+            }, nameof(Details), new { id });
         }
 
         [HttpPost]
@@ -125,18 +116,11 @@ namespace Zentic.Web.Controllers
         [Authorize(Policy = "CanApproveRequisition")]
         public async Task<IActionResult> Approve(int id, string? notes)
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var approverId))
-                return RedirectToAction("Login", "Auth");
-            try
+            return await ExecuteAndRedirect(async userId =>
             {
-                await _expenseService.ApproveAsync(id, approverId, notes);
+                await _expenseService.ApproveAsync(id, userId, notes);
                 TempData["Success"] = "Requisition approved.";
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = ex.Message;
-            }
-            return RedirectToAction(nameof(Details), new { id });
+            }, nameof(Details), new { id });
         }
 
         [HttpPost]
@@ -149,36 +133,22 @@ namespace Zentic.Web.Controllers
                 TempData["Error"] = "Rejection reason is required.";
                 return RedirectToAction(nameof(Details), new { id });
             }
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var approverId))
-                return RedirectToAction("Login", "Auth");
-            try
+            return await ExecuteAndRedirect(async userId =>
             {
-                await _expenseService.RejectAsync(id, approverId, reason);
+                await _expenseService.RejectAsync(id, userId, reason);
                 TempData["Success"] = "Requisition rejected.";
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = ex.Message;
-            }
-            return RedirectToAction(nameof(Details), new { id });
+            }, nameof(Details), new { id });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Cancel(int id)
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
-            try
+            return await ExecuteAndRedirect(async userId =>
             {
                 await _expenseService.CancelAsync(id, userId);
                 TempData["Success"] = "Requisition cancelled.";
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = ex.Message;
-            }
-            return RedirectToAction(nameof(Index));
+            }, nameof(Index));
         }
 
         [HttpPost]
@@ -186,18 +156,11 @@ namespace Zentic.Web.Controllers
         [Authorize(Policy = "CanApproveRequisition")]
         public async Task<IActionResult> MarkAsPaid(int id)
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
-            try
+            return await ExecuteAndRedirect(async userId =>
             {
                 await _expenseService.MarkAsPaidAsync(id, userId);
                 TempData["Success"] = "Requisition marked as paid.";
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = ex.Message;
-            }
-            return RedirectToAction(nameof(Details), new { id });
+            }, nameof(Details), new { id });
         }
 
         [HttpPost]
@@ -205,18 +168,11 @@ namespace Zentic.Web.Controllers
         [Authorize(Policy = "CanApproveRequisition")]
         public async Task<IActionResult> AddQuotation(AddQuotationDto dto)
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
-            try
+            return await ExecuteAndRedirect(async userId =>
             {
                 await _expenseService.AddQuotationAsync(dto, userId);
                 TempData["Success"] = "Quotation added.";
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = ex.Message;
-            }
-            return RedirectToAction(nameof(Details), new { id = dto.RequisitionId });
+            }, nameof(Details), new { id = dto.RequisitionId });
         }
 
         [HttpPost]
@@ -224,18 +180,11 @@ namespace Zentic.Web.Controllers
         [Authorize(Policy = "CanApproveRequisition")]
         public async Task<IActionResult> RemoveQuotation(int requisitionId, int quotationId)
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
-            try
+            return await ExecuteAndRedirect(async userId =>
             {
                 await _expenseService.RemoveQuotationAsync(quotationId, userId);
                 TempData["Success"] = "Quotation removed.";
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = ex.Message;
-            }
-            return RedirectToAction(nameof(Details), new { id = requisitionId });
+            }, nameof(Details), new { id = requisitionId });
         }
 
         [HttpPost]
@@ -243,26 +192,19 @@ namespace Zentic.Web.Controllers
         [Authorize(Policy = "CanApproveRequisition")]
         public async Task<IActionResult> SelectQuotation(int requisitionId, int quotationId, string? reason)
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
-            try
+            return await ExecuteAndRedirect(async userId =>
             {
                 await _expenseService.SelectQuotationAsync(requisitionId, quotationId, reason, userId);
                 TempData["Success"] = "Quotation selected.";
-            }
-            catch (Exception ex)
-            {
-                TempData["Error"] = ex.Message;
-            }
-            return RedirectToAction(nameof(Details), new { id = requisitionId });
+            }, nameof(Details), new { id = requisitionId });
         }
 
         [Authorize(Roles = "Admin,Finance")]
         public async Task<IActionResult> Export(string? status, string? search, string? category, bool? flagged)
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
-            var role = User.FindFirstValue(ClaimTypes.Role) ?? "Staff";
+            var userId = TryGetCurrentUserId();
+            if (userId == null) return RedirectToAction("Login", "Auth");
+            var role = User.FindFirstValue(System.Security.Claims.ClaimTypes.Role) ?? "Staff";
 
             var filter = new ExpenseFilterDto
             {
@@ -274,7 +216,7 @@ namespace Zentic.Web.Controllers
                 PageSize = 2000
             };
 
-            var result = await _expenseService.GetPagedAsync(filter, userId, role);
+            var result = await _expenseService.GetPagedAsync(filter, userId.Value, role);
             var csv = new System.Text.StringBuilder();
             csv.AppendLine("\uFEFFRequisitionNumber,Title,Amount,Category,Status,Requester,Department,Vendor,CreatedAt,SubmittedAt,ApprovedAt,PaidAt,Flagged");
             foreach (var r in result.Items)
@@ -289,12 +231,26 @@ namespace Zentic.Web.Controllers
                     r.IsFlaggedForReview ? "Yes" : "No"));
             }
 
-            var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
-            await _auditService.LogAsync(Domain.Enums.AuditEventType.Export, nameof(Domain.Entities.ExpenseRequisition),
-                "CSV", userId, ip, null, null, $"Exported {result.Items.Count} requisition records", null);
+            await LogAuditAsync(Domain.Enums.AuditEventType.Export, nameof(Domain.Entities.ExpenseRequisition),
+                "CSV", $"Exported {result.Items.Count} requisition records");
 
             return File(System.Text.Encoding.UTF8.GetBytes(csv.ToString()), "text/csv",
                 $"requisitions_{DateTime.UtcNow:yyyyMMdd_HHmm}.csv");
+        }
+
+        private async Task<IActionResult> ExecuteAndRedirect(Func<int, Task> action, string actionName, object? routeValues = null)
+        {
+            var userId = TryGetCurrentUserId();
+            if (userId == null) return RedirectToAction("Login", "Auth");
+            try
+            {
+                await action(userId.Value);
+            }
+            catch (Exception ex)
+            {
+                TempData["Error"] = ex.Message;
+            }
+            return RedirectToAction(actionName, routeValues);
         }
 
         private static string Csv(string? value)
