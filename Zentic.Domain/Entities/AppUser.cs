@@ -74,6 +74,7 @@ namespace Zentic.Domain.Entities
 
         public void AddPasswordToHistory(string passwordHash, int maxHistory)
         {
+            if (maxHistory <= 0) return;
             var history = PasswordHistory;
             history.Insert(0, passwordHash);
             if (history.Count > maxHistory)
