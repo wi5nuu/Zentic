@@ -270,6 +270,16 @@ namespace Zentic.Infrastructure.Services
                 var delegateUser = await _db.Users.FindAsync(new object[] { dto.DelegateId }, cancellationToken);
                 if (delegateUser == null) throw new InvalidOperationException("Delegate user not found.");
 
+                if (!delegateUser.IsActive)
+                    throw new InvalidOperationException("Cannot delegate to an inactive user.");
+
+                // Validate dates
+                var now = DateTime.UtcNow;
+                if (dto.StartDate < now.Date)
+                    throw new InvalidOperationException("Start date cannot be in the past.");
+                if (dto.EndDate < dto.StartDate)
+                    throw new InvalidOperationException("End date must be on or after start date.");
+
                 // Check for overlapping delegation for this delegator
                 var existing = await _db.ApprovalDelegations
                     .FirstOrDefaultAsync(d => d.DelegatorId == delegatorId
@@ -280,8 +290,6 @@ namespace Zentic.Infrastructure.Services
 
                 if (existing != null)
                     throw new InvalidOperationException("An active delegation already exists for this period.");
-
-                var now = DateTime.UtcNow;
                 var delegation = new ApprovalDelegation
                 {
                     DelegatorId = delegatorId,
