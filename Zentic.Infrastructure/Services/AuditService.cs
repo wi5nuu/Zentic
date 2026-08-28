@@ -50,7 +50,7 @@ namespace Zentic.Infrastructure.Services
                 
                 if (_pendingLogs.Count >= 50)
                 {
-                    _ = Task.Run(FlushAsync);
+                    _ = Task.Run(() => FlushAsync(CancellationToken.None));
                 }
             }
         }

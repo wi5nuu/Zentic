@@ -4,6 +4,7 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -22,9 +23,9 @@ namespace Zentic.Infrastructure.Services
             _unitOfWork = unitOfWork;
         }
 
-        public async Task<ApprovalWorkflowDto> CreateWorkflowAsync(CreateApprovalWorkflowDto dto, int createdById)
+        public async Task<ApprovalWorkflowDto> CreateWorkflowAsync(CreateApprovalWorkflowDto dto, int createdById, CancellationToken cancellationToken = default)
         {
-            await _unitOfWork.BeginTransactionAsync();
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
                 var workflow = new ApprovalWorkflow
@@ -42,7 +43,7 @@ namespace Zentic.Infrastructure.Services
                 };
 
                 _db.ApprovalWorkflows.Add(workflow);
-                await _unitOfWork.SaveChangesAsync();
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 // Add steps
                 for (int i = 0; i < dto.Steps.Count; i++)
@@ -68,22 +69,22 @@ namespace Zentic.Infrastructure.Services
                     _db.ApprovalSteps.Add(step);
                 }
 
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitAsync(cancellationToken);
 
                 await _auditService.LogAsync(AuditEventType.Create, nameof(ApprovalWorkflow), workflow.Id.ToString(),
-                    createdById, null, null, System.Text.Json.JsonSerializer.Serialize(new { workflow.Id, workflow.Name }), "Approval workflow created", null);
+                    createdById, null, null, System.Text.Json.JsonSerializer.Serialize(new { workflow.Id, workflow.Name }), "Approval workflow created", null, cancellationToken);
 
-                return (await GetWorkflowByIdAsync(workflow.Id))!;
+                return (await GetWorkflowByIdAsync(workflow.Id, cancellationToken))!;
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
+                await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
             }
         }
 
-        public async Task<ApprovalWorkflowDto?> GetWorkflowByIdAsync(int id)
+        public async Task<ApprovalWorkflowDto?> GetWorkflowByIdAsync(int id, CancellationToken cancellationToken = default)
         {
             var workflow = await _db.ApprovalWorkflows
                 .Include(w => w.Department)
@@ -93,14 +94,14 @@ namespace Zentic.Infrastructure.Services
                     .ThenInclude(s => s.Department)
                 .Include(w => w.Steps)
                     .ThenInclude(s => s.EscalationRule)
-                .FirstOrDefaultAsync(w => w.Id == id && !w.IsDeleted);
+                .FirstOrDefaultAsync(w => w.Id == id && !w.IsDeleted, cancellationToken);
 
             if (workflow == null) return null;
 
             return MapToDto(workflow);
         }
 
-        public async Task<List<ApprovalWorkflowDto>> GetActiveWorkflowsAsync(int? departmentId = null, ExpenseCategory? category = null, decimal? amount = null)
+        public async Task<List<ApprovalWorkflowDto>> GetActiveWorkflowsAsync(int? departmentId = null, ExpenseCategory? category = null, decimal? amount = null, CancellationToken cancellationToken = default)
         {
             var query = _db.ApprovalWorkflows
                 .Include(w => w.Department)
@@ -118,19 +119,19 @@ namespace Zentic.Infrastructure.Services
 
             var workflows = await query
                 .OrderBy(w => w.Priority)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return workflows.Select(MapToDto).ToList();
         }
 
-        public async Task<ApprovalWorkflowDto> UpdateWorkflowAsync(int id, CreateApprovalWorkflowDto dto, int updatedById)
+        public async Task<ApprovalWorkflowDto> UpdateWorkflowAsync(int id, CreateApprovalWorkflowDto dto, int updatedById, CancellationToken cancellationToken = default)
         {
-            await _unitOfWork.BeginTransactionAsync();
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
                 var workflow = await _db.ApprovalWorkflows
                     .Include(w => w.Steps)
-                    .FirstOrDefaultAsync(w => w.Id == id && !w.IsDeleted);
+                    .FirstOrDefaultAsync(w => w.Id == id && !w.IsDeleted, cancellationToken);
 
                 if (workflow == null) throw new InvalidOperationException("Workflow not found.");
 
@@ -170,51 +171,51 @@ namespace Zentic.Infrastructure.Services
                     _db.ApprovalSteps.Add(step);
                 }
 
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitAsync(cancellationToken);
 
                 await _auditService.LogAsync(AuditEventType.Update, nameof(ApprovalWorkflow), workflow.Id.ToString(),
-                    updatedById, null, null, System.Text.Json.JsonSerializer.Serialize(new { workflow.Id, workflow.Name }), "Approval workflow updated", null);
+                    updatedById, null, null, System.Text.Json.JsonSerializer.Serialize(new { workflow.Id, workflow.Name }), "Approval workflow updated", null, cancellationToken);
 
-                return (await GetWorkflowByIdAsync(workflow.Id))!;
+                return (await GetWorkflowByIdAsync(workflow.Id, cancellationToken))!;
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
+                await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
             }
         }
 
-        public async Task<bool> DeleteWorkflowAsync(int id, int deletedById)
+        public async Task<bool> DeleteWorkflowAsync(int id, int deletedById, CancellationToken cancellationToken = default)
         {
-            await _unitOfWork.BeginTransactionAsync();
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
-                var workflow = await _db.ApprovalWorkflows.FindAsync(id);
+                var workflow = await _db.ApprovalWorkflows.FindAsync(new object[] { id }, cancellationToken);
                 if (workflow == null) return false;
 
                 workflow.IsDeleted = true;
                 workflow.DeletedAt = DateTime.UtcNow;
                 workflow.UpdatedAt = DateTime.UtcNow;
 
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitAsync(cancellationToken);
 
                 await _auditService.LogAsync(AuditEventType.Delete, nameof(ApprovalWorkflow), id.ToString(),
-                    deletedById, null, null, null, "Approval workflow deleted", null);
+                    deletedById, null, null, null, "Approval workflow deleted", null, cancellationToken);
 
                 return true;
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
+                await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
             }
         }
 
-        public async Task<EscalationRuleDto> CreateEscalationRuleAsync(CreateEscalationRuleDto dto, int createdById)
+        public async Task<EscalationRuleDto> CreateEscalationRuleAsync(CreateEscalationRuleDto dto, int createdById, CancellationToken cancellationToken = default)
         {
-            await _unitOfWork.BeginTransactionAsync();
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
                 var rule = new EscalationRule
@@ -237,32 +238,32 @@ namespace Zentic.Infrastructure.Services
                 };
 
                 _db.EscalationRules.Add(rule);
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitAsync(cancellationToken);
 
                 await _auditService.LogAsync(AuditEventType.Create, nameof(EscalationRule), rule.Id.ToString(),
-                    createdById, null, null, System.Text.Json.JsonSerializer.Serialize(new { rule.Id, rule.Name }), "Escalation rule created", null);
+                    createdById, null, null, System.Text.Json.JsonSerializer.Serialize(new { rule.Id, rule.Name }), "Escalation rule created", null, cancellationToken);
 
                 return MapToDto(rule);
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
+                await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
             }
         }
 
-        public async Task<ApprovalDelegationDto> CreateDelegationAsync(CreateApprovalDelegationDto dto, int delegatorId)
+        public async Task<ApprovalDelegationDto> CreateDelegationAsync(CreateApprovalDelegationDto dto, int delegatorId, CancellationToken cancellationToken = default)
         {
-            await _unitOfWork.BeginTransactionAsync();
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
                 // Validate delegator exists
-                var delegator = await _db.Users.FindAsync(delegatorId);
+                var delegator = await _db.Users.FindAsync(new object[] { delegatorId }, cancellationToken);
                 if (delegator == null) throw new InvalidOperationException("Delegator not found.");
 
                 // Validate delegate exists
-                var delegateUser = await _db.Users.FindAsync(dto.DelegateId);
+                var delegateUser = await _db.Users.FindAsync(new object[] { dto.DelegateId }, cancellationToken);
                 if (delegateUser == null) throw new InvalidOperationException("Delegate user not found.");
 
                 // Check for overlapping delegation for this delegator
@@ -271,7 +272,7 @@ namespace Zentic.Infrastructure.Services
                         && d.IsActive
                         && d.StartDate <= dto.EndDate
                         && d.EndDate >= dto.StartDate
-                        && !d.IsDeleted);
+                        && !d.IsDeleted, cancellationToken);
 
                 if (existing != null)
                     throw new InvalidOperationException("An active delegation already exists for this period.");
@@ -291,11 +292,11 @@ namespace Zentic.Infrastructure.Services
                 };
 
                 _db.ApprovalDelegations.Add(delegation);
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitAsync(cancellationToken);
 
                 await _auditService.LogAsync(AuditEventType.Create, nameof(ApprovalDelegation), delegation.Id.ToString(),
-                    delegatorId, null, null, System.Text.Json.JsonSerializer.Serialize(new { delegation.Id, delegation.DelegatorId, delegation.DelegateId }), "Approval delegation created", null);
+                    delegatorId, null, null, System.Text.Json.JsonSerializer.Serialize(new { delegation.Id, delegation.DelegatorId, delegation.DelegateId }), "Approval delegation created", null, cancellationToken);
 
                 // Notify delegate
                 await _notificationService.CreateAsync(new CreateNotificationDto
@@ -308,46 +309,46 @@ namespace Zentic.Infrastructure.Services
                     EntityType = nameof(ApprovalDelegation),
                     EntityId = delegation.Id.ToString(),
                     ActionUrl = $"/Approval/Delegations/{delegation.Id}"
-                }, 0);
+                }, 0, cancellationToken);
 
                 return MapToDto(delegation);
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
+                await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
             }
         }
 
-        public async Task<bool> RevokeDelegationAsync(int delegationId, int delegatorId)
+        public async Task<bool> RevokeDelegationAsync(int delegationId, int delegatorId, CancellationToken cancellationToken = default)
         {
-            await _unitOfWork.BeginTransactionAsync();
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
                 var delegation = await _db.ApprovalDelegations
-                    .FirstOrDefaultAsync(d => d.Id == delegationId && d.DelegatorId == delegatorId && !d.IsDeleted);
+                    .FirstOrDefaultAsync(d => d.Id == delegationId && d.DelegatorId == delegatorId && !d.IsDeleted, cancellationToken);
 
                 if (delegation == null) return false;
 
                 delegation.IsActive = false;
                 delegation.UpdatedAt = DateTime.UtcNow;
 
-                await _unitOfWork.SaveChangesAsync();
-                await _unitOfWork.CommitAsync();
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitAsync(cancellationToken);
 
                 await _auditService.LogAsync(AuditEventType.Delete, nameof(ApprovalDelegation), delegationId.ToString(),
-                    delegatorId, null, null, null, "Approval delegation revoked", null);
+                    delegatorId, null, null, null, "Approval delegation revoked", null, cancellationToken);
 
                 return true;
             }
             catch
             {
-                await _unitOfWork.RollbackAsync();
+                await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
             }
         }
 
-        public async Task<List<ApprovalDelegationDto>> GetActiveDelegationsAsync(int userId)
+        public async Task<List<ApprovalDelegationDto>> GetActiveDelegationsAsync(int userId, CancellationToken cancellationToken = default)
         {
             var now = DateTime.UtcNow;
             var delegations = await _db.ApprovalDelegations
@@ -359,12 +360,12 @@ namespace Zentic.Infrastructure.Services
                     && d.StartDate <= now
                     && d.EndDate >= now
                     && !d.IsDeleted)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return delegations.Select(MapToDto).ToList();
         }
 
-        public async Task<List<ApprovalDelegationDto>> GetDelegationsByDelegatorAsync(int delegatorId)
+        public async Task<List<ApprovalDelegationDto>> GetDelegationsByDelegatorAsync(int delegatorId, CancellationToken cancellationToken = default)
         {
             var now = DateTime.UtcNow;
             var delegations = await _db.ApprovalDelegations
@@ -376,23 +377,23 @@ namespace Zentic.Infrastructure.Services
                     && d.EndDate >= now
                     && !d.IsDeleted)
                 .OrderByDescending(d => d.StartDate)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return delegations.Select(MapToDto).ToList();
         }
 
-        public async Task<ApprovalResultDto> ProcessApprovalAsync(int requisitionId, int approverId, ApprovalAction action, string? notes)
+        public async Task<ApprovalResultDto> ProcessApprovalAsync(int requisitionId, int approverId, ApprovalAction action, string? notes, CancellationToken cancellationToken = default)
         {
             var requisition = await _db.ExpenseRequisitions
                 .Include(r => r.Requester)
                 .Include(r => r.Department)
-                .FirstOrDefaultAsync(r => r.Id == requisitionId && !r.IsDeleted);
+                .FirstOrDefaultAsync(r => r.Id == requisitionId && !r.IsDeleted, cancellationToken);
 
             if (requisition == null)
                 return new ApprovalResultDto { Success = false, Message = "Requisition not found." };
 
             // Check if user is authorized to approve
-            var canApprove = await CanUserApproveAtStepAsync(requisition, approverId);
+            var canApprove = await CanUserApproveAtStepAsync(requisition, approverId, cancellationToken);
             if (!canApprove)
                 return new ApprovalResultDto { Success = false, Message = "You are not authorized to approve this requisition at this stage." };
 
@@ -415,7 +416,7 @@ namespace Zentic.Infrastructure.Services
 
             requisition.UpdatedAt = DateTime.UtcNow;
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             // Record approval history
             var history = new RequisitionApprovalHistory
@@ -429,7 +430,7 @@ namespace Zentic.Infrastructure.Services
                 Timestamp = DateTime.UtcNow
             };
             _db.RequisitionApprovalHistories.Add(history);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             // Notify requester
             await _notificationService.CreateAsync(new CreateNotificationDto
@@ -442,17 +443,17 @@ namespace Zentic.Infrastructure.Services
                 EntityType = nameof(ExpenseRequisition),
                 EntityId = requisitionId.ToString(),
                 ActionUrl = $"/Expense/Details/{requisitionId}"
-            }, 0);
+            }, 0, cancellationToken);
 
             await _auditService.LogAsync(
                 action == ApprovalAction.Approve ? AuditEventType.Approve : AuditEventType.Reject,
                 nameof(ExpenseRequisition), requisitionId.ToString(),
-                approverId, null, oldStatus.ToString(), requisition.Status.ToString(), notes, requisitionId);
+                approverId, null, oldStatus.ToString(), requisition.Status.ToString(), notes, requisitionId, cancellationToken);
 
             return new ApprovalResultDto { Success = true, Message = $"Requisition {(action == ApprovalAction.Approve ? "approved" : "rejected")} successfully." };
         }
 
-        private async Task<bool> CanUserApproveAtStepAsync(ExpenseRequisition requisition, int userId)
+        private async Task<bool> CanUserApproveAtStepAsync(ExpenseRequisition requisition, int userId, CancellationToken cancellationToken = default)
         {
             // Find applicable workflow - query directly to get entities with steps
             var workflow = await _db.ApprovalWorkflows
@@ -468,12 +469,12 @@ namespace Zentic.Infrastructure.Services
                 .Where(w => w.MinAmount == null || w.MinAmount <= requisition.Amount)
                 .Where(w => w.MaxAmount == null || w.MaxAmount >= requisition.Amount)
                 .OrderBy(w => w.Priority)
-                .FirstOrDefaultAsync();
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (workflow == null)
             {
                 // Fallback to role-based authorization
-                var user = await _db.Users.FindAsync(userId);
+                var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
                 return user?.Role == UserRole.Admin || user?.Role == UserRole.Finance || user?.Role == UserRole.Manager;
             }
 
@@ -485,7 +486,7 @@ namespace Zentic.Infrastructure.Services
             if (currentStep == null) return false;
 
             // Check if user is an approver for this step
-            return await IsUserApproverForStepAsync(currentStep, userId, requisition);
+            return await IsUserApproverForStepAsync(currentStep, userId, requisition, cancellationToken);
         }
 
         private bool IsStepApplicable(ApprovalStep step, RequisitionStatus status)
@@ -500,7 +501,7 @@ namespace Zentic.Infrastructure.Services
             };
         }
 
-        private async Task<bool> IsUserApproverForStepAsync(ApprovalStep step, int userId, ExpenseRequisition requisition, int depth = 0)
+        private async Task<bool> IsUserApproverForStepAsync(ApprovalStep step, int userId, ExpenseRequisition requisition, CancellationToken cancellationToken = default, int depth = 0)
         {
             const int MaxDelegationDepth = 5;
             if (depth > MaxDelegationDepth)
@@ -508,7 +509,7 @@ namespace Zentic.Infrastructure.Services
                 return false; // Prevent infinite recursion
             }
 
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             if (user == null) return false;
 
             // Check active delegations
@@ -520,12 +521,12 @@ namespace Zentic.Infrastructure.Services
                     && d.EndDate >= now
                     && (d.DepartmentId == null || d.DepartmentId == requisition.DepartmentId)
                     && (d.MaxAmount == null || d.MaxAmount >= requisition.Amount)
-                    && !d.IsDeleted);
+                    && !d.IsDeleted, cancellationToken);
 
             if (delegation != null)
             {
                 // Check if delegator is an approver for this step (with incremented depth)
-                return await IsUserApproverForStepAsync(step, delegation.DelegatorId, requisition, depth + 1);
+                return await IsUserApproverForStepAsync(step, delegation.DelegatorId, requisition, cancellationToken, depth + 1);
             }
 
             // Check based on approver type
@@ -623,13 +624,13 @@ namespace Zentic.Infrastructure.Services
             };
         }
 
-        public async Task<List<EscalationRuleDto>> GetActiveEscalationRulesAsync()
+        public async Task<List<EscalationRuleDto>> GetActiveEscalationRulesAsync(CancellationToken cancellationToken = default)
         {
             var rules = await _db.EscalationRules
                 .Include(e => e.EscalateToUser)
                 .Include(e => e.Department)
                 .Where(e => e.IsActive && !e.IsDeleted)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return rules.Select(MapToDto).ToList();
         }

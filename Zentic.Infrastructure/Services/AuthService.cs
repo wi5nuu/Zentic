@@ -10,6 +10,7 @@ using OtpNet;
 using QRCoder;
 using System.Drawing;
 using System.Security.Cryptography;
+using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -36,12 +37,12 @@ namespace Zentic.Infrastructure.Services
             _passwordOptions = passwordOptions.Value;
         }
 
-        public async Task<AuthResultDto?> LoginAsync(string email, string password, string? ipAddress)
+        public async Task<AuthResultDto?> LoginAsync(string email, string password, string? ipAddress, CancellationToken cancellationToken = default)
         {
             // Fixed: Always fetch user first, then perform timing-safe comparison
             var user = await _db.Users
                 .Include(u => u.Department)
-                .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
+                .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
 
             // Timing-safe check - always verify password even if user not found
             var isValidPassword = false;
@@ -62,7 +63,7 @@ namespace Zentic.Infrastructure.Services
                 // Log failed login attempt
                 if (user != null)
                 {
-                    await RecordFailedLoginAttempt(user, ipAddress);
+                    await RecordFailedLoginAttempt(user, ipAddress, cancellationToken);
                 }
                 
                 await _auditService.LogAsync(
@@ -74,7 +75,8 @@ namespace Zentic.Infrastructure.Services
                     null,
                     null,
                     $"Failed login attempt for {email}",
-                    null
+                    null,
+                    cancellationToken
                 );
 
                 return new AuthResultDto { Success = false, ErrorMessage = "Invalid email or password." };
@@ -92,7 +94,8 @@ namespace Zentic.Infrastructure.Services
                     null,
                     null,
                     "Login attempt for inactive account",
-                    null
+                    null,
+                    cancellationToken
                 );
                 return new AuthResultDto { Success = false, ErrorMessage = "Account is inactive." };
             }
@@ -109,7 +112,8 @@ namespace Zentic.Infrastructure.Services
                     null,
                     null,
                     $"Login attempt for locked account. Locked until: {user.AccountLockedUntil}",
-                    null
+                    null,
+                    cancellationToken
                 );
                 return new AuthResultDto 
                 { 
@@ -119,7 +123,7 @@ namespace Zentic.Infrastructure.Services
             }
 
             // Check password expiry
-            if (await IsPasswordExpiredAsync(user.Id))
+            if (await IsPasswordExpiredAsync(user.Id, cancellationToken))
             {
                 await _auditService.LogAsync(
                     AuditEventType.LoginFailed,
@@ -130,7 +134,8 @@ namespace Zentic.Infrastructure.Services
                     null,
                     null,
                     "Login attempt with expired password",
-                    null
+                    null,
+                    cancellationToken
                 );
                 return new AuthResultDto 
                 { 
@@ -147,7 +152,7 @@ namespace Zentic.Infrastructure.Services
 
             try
             {
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
                 
                 // Log successful login
                 await _auditService.LogAsync(
@@ -159,7 +164,8 @@ namespace Zentic.Infrastructure.Services
                     null,
                     null,
                     "Successful login",
-                    null
+                    null,
+                    cancellationToken
                 );
             }
             catch
@@ -189,7 +195,7 @@ namespace Zentic.Infrastructure.Services
             };
         }
 
-        private async Task RecordFailedLoginAttempt(AppUser user, string? ipAddress)
+        private async Task RecordFailedLoginAttempt(AppUser user, string? ipAddress, CancellationToken cancellationToken = default)
         {
             user.FailedLoginAttempts++;
 
@@ -206,19 +212,20 @@ namespace Zentic.Infrastructure.Services
                     null,
                     null,
                     $"Account locked after {MaxFailedAttempts} failed login attempts. Locked until: {user.AccountLockedUntil}",
-                    null
+                    null,
+                    cancellationToken
                 );
             }
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task<AppUserDto?> GetUserByIdAsync(int id)
+        public async Task<AppUserDto?> GetUserByIdAsync(int id, CancellationToken cancellationToken = default)
         {
             var user = await _db.Users
                 .Include(u => u.Department)
                 .Include(u => u.Manager)
-                .FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted);
+                .FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted, cancellationToken);
 
             if (user == null) return null;
 
@@ -242,15 +249,15 @@ namespace Zentic.Infrastructure.Services
             };
         }
 
-        public async Task<bool> UnlockAccountAsync(int userId, int adminId, string? ipAddress)
+        public async Task<bool> UnlockAccountAsync(int userId, int adminId, string? ipAddress, CancellationToken cancellationToken = default)
         {
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             if (user == null) return false;
 
             user.FailedLoginAttempts = 0;
             user.AccountLockedUntil = null;
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             await _auditService.LogAsync(
                 AuditEventType.AccountUnlocked,
@@ -261,16 +268,17 @@ namespace Zentic.Infrastructure.Services
                 null,
                 null,
                 $"Account unlocked by admin {adminId}",
-                null
+                null,
+                cancellationToken
             );
 
             return true;
         }
 
-        public async Task<bool> ResetPasswordAsync(string email, string resetToken, string newPassword)
+        public async Task<bool> ResetPasswordAsync(string email, string resetToken, string newPassword, CancellationToken cancellationToken = default)
         {
             var user = await _db.Users
-                .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
+                .FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted, cancellationToken);
 
             if (user == null || 
                 string.IsNullOrEmpty(user.PasswordResetToken) || 
@@ -305,7 +313,7 @@ namespace Zentic.Infrastructure.Services
             user.AccountLockedUntil = null;
             user.LastPasswordChangeAt = DateTime.UtcNow;
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             await _auditService.LogAsync(
                 AuditEventType.PasswordReset,
@@ -316,16 +324,17 @@ namespace Zentic.Infrastructure.Services
                 null,
                 null,
                 "Password reset via token",
-                null
+                null,
+                cancellationToken
             );
 
             return true;
         }
 
-        public async Task<string> GeneratePasswordResetTokenAsync(string email)
+        public async Task<string> GeneratePasswordResetTokenAsync(string email, CancellationToken cancellationToken = default)
         {
             var user = await _db.Users
-                .FirstOrDefaultAsync(u => u.Email == email && u.IsActive && !u.IsDeleted);
+                .FirstOrDefaultAsync(u => u.Email == email && u.IsActive && !u.IsDeleted, cancellationToken);
 
             if (user == null) 
             {
@@ -337,14 +346,14 @@ namespace Zentic.Infrastructure.Services
             user.PasswordResetToken = token;
             user.PasswordResetExpiry = DateTime.UtcNow.AddHours(24);
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             return token;
         }
 
-        public async Task<bool> ChangePasswordAsync(int userId, string currentPassword, string newPassword, string? ipAddress)
+        public async Task<bool> ChangePasswordAsync(int userId, string currentPassword, string newPassword, string? ipAddress, CancellationToken cancellationToken = default)
         {
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             if (user == null) return false;
 
             // Verify current password
@@ -359,7 +368,8 @@ namespace Zentic.Infrastructure.Services
                     null,
                     null,
                     "Failed password change attempt - invalid current password",
-                    null
+                    null,
+                    cancellationToken
                 );
                 return false;
             }
@@ -384,7 +394,7 @@ namespace Zentic.Infrastructure.Services
             user.AddPasswordToHistory(newHash, _passwordOptions.PasswordHistoryCount);
             user.LastPasswordChangeAt = DateTime.UtcNow;
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             await _auditService.LogAsync(
                 AuditEventType.PasswordChange,
@@ -395,37 +405,38 @@ namespace Zentic.Infrastructure.Services
                 null,
                 null,
                 "Password changed successfully",
-                null
+                null,
+                cancellationToken
             );
 
             return true;
         }
 
-        public async Task<PasswordValidationResult> ValidatePasswordAsync(string password)
+        public async Task<PasswordValidationResult> ValidatePasswordAsync(string password, CancellationToken cancellationToken = default)
         {
-            return _passwordValidator.Validate(password);
+            return await Task.FromResult(_passwordValidator.Validate(password));
         }
 
-        public async Task<bool> IsPasswordExpiredAsync(int userId)
+        public async Task<bool> IsPasswordExpiredAsync(int userId, CancellationToken cancellationToken = default)
         {
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             if (user == null || user.LastPasswordChangeAt == null) return false;
 
             return (DateTime.UtcNow - user.LastPasswordChangeAt.Value).TotalDays > _passwordOptions.MaxAgeDays;
         }
 
-        public async Task<IEnumerable<string>> GetPasswordHistoryAsync(int userId, int count)
+        public async Task<IEnumerable<string>> GetPasswordHistoryAsync(int userId, int count, CancellationToken cancellationToken = default)
         {
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             if (user == null) return Enumerable.Empty<string>();
 
             return user.PasswordHistory.Take(count);
         }
 
         // MFA/2FA Methods
-        public async Task<MfaSetupDto> EnableMfaAsync(int userId)
+        public async Task<MfaSetupDto> EnableMfaAsync(int userId, CancellationToken cancellationToken = default)
         {
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             if (user == null) throw new InvalidOperationException("User not found.");
 
             if (user.MfaEnabled)
@@ -457,7 +468,7 @@ namespace Zentic.Infrastructure.Services
             user.MfaEnabled = false;
             user.MfaEnabledAt = null;
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             return new MfaSetupDto
             {
@@ -468,9 +479,9 @@ namespace Zentic.Infrastructure.Services
             };
         }
 
-public async Task<bool> VerifyMfaCodeAsync(int userId, string code)
+public async Task<bool> VerifyMfaCodeAsync(int userId, string code, CancellationToken cancellationToken = default)
         {
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             if (user == null || string.IsNullOrEmpty(user.MfaSecret)) return false;
 
             var totp = new Totp(Base32Encoding.ToBytes(user.MfaSecret), step: 30, totpSize: 6);
@@ -483,7 +494,7 @@ public async Task<bool> VerifyMfaCodeAsync(int userId, string code)
                 {
                     user.MfaEnabled = true;
                     user.MfaEnabledAt = DateTime.UtcNow;
-                    await _db.SaveChangesAsync();
+                    await _db.SaveChangesAsync(cancellationToken);
 
                     await _auditService.LogAsync(
                         AuditEventType.MfaEnabled,
@@ -494,19 +505,20 @@ public async Task<bool> VerifyMfaCodeAsync(int userId, string code)
                         null,
                         null,
                         "MFA enabled",
-                        null);
+                        null,
+                        cancellationToken);
                 }
             }
 
 return isValid;
         }
 
-        public async Task<bool> DisableMfaAsync(int userId, string code)
+        public async Task<bool> DisableMfaAsync(int userId, string code, CancellationToken cancellationToken = default)
         {
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             if (user == null || !user.MfaEnabled) return false;
 
-            var isValid = await VerifyMfaCodeAsync(userId, code);
+            var isValid = await VerifyMfaCodeAsync(userId, code, cancellationToken);
             if (!isValid) return false;
 
             user.MfaEnabled = false;
@@ -514,7 +526,7 @@ return isValid;
             user.MfaBackupCodes = new List<string>();
             user.MfaEnabledAt = null;
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             await _auditService.LogAsync(
                 AuditEventType.MfaDisabled,
@@ -525,14 +537,15 @@ return isValid;
                 null,
                 null,
                 "MFA disabled",
-                null);
+                null,
+                cancellationToken);
 
             return true;
         }
 
-        public async Task<bool> ValidateBackupCodeAsync(int userId, string code)
+        public async Task<bool> ValidateBackupCodeAsync(int userId, string code, CancellationToken cancellationToken = default)
         {
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             if (user == null || !user.MfaEnabled) return false;
 
             var backupCodes = user.MfaBackupCodes;
@@ -543,7 +556,7 @@ return isValid;
                 // Remove the used backup code
                 backupCodes.RemoveAt(codeIndex);
                 user.MfaBackupCodes = backupCodes;
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(cancellationToken);
 
                 await _auditService.LogAsync(
                     AuditEventType.Login,
@@ -554,7 +567,8 @@ return isValid;
                     null,
                     null,
                     "Login with MFA backup code",
-                    null
+                    null,
+                    cancellationToken
                 );
 
                 return true;
@@ -563,9 +577,9 @@ return isValid;
             return false;
         }
 
-        public async Task<List<string>> GenerateBackupCodesAsync(int userId)
+        public async Task<List<string>> GenerateBackupCodesAsync(int userId, CancellationToken cancellationToken = default)
         {
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             if (user == null || !user.MfaEnabled) throw new InvalidOperationException("User not found or MFA not enabled.");
 
             var newBackupCodes = new List<string>();
@@ -575,14 +589,14 @@ return isValid;
             }
 
             user.MfaBackupCodes = newBackupCodes;
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
 
             return newBackupCodes;
         }
 
-        public async Task<bool> IsMfaEnabledAsync(int userId)
+        public async Task<bool> IsMfaEnabledAsync(int userId, CancellationToken cancellationToken = default)
         {
-            var user = await _db.Users.FindAsync(userId);
+            var user = await _db.Users.FindAsync(new object[] { userId }, cancellationToken);
             return user?.MfaEnabled ?? false;
         }
 
@@ -603,20 +617,20 @@ return isValid;
             return Convert.ToBase64String(qrCodeBytes);
         }
 
-        public async Task<AuthResultDto?> LoginWithMfaAsync(string email, string password, string mfaCode, string? ipAddress)
+        public async Task<AuthResultDto?> LoginWithMfaAsync(string email, string password, string mfaCode, string? ipAddress, CancellationToken cancellationToken = default)
         {
             // First verify password
-            var loginResult = await LoginAsync(email, password, ipAddress);
+            var loginResult = await LoginAsync(email, password, ipAddress, cancellationToken);
             if (loginResult == null || !loginResult.Success || loginResult.User == null)
                 return loginResult;
 
-            var user = await _db.Users.FindAsync(loginResult.User.Id);
+            var user = await _db.Users.FindAsync(new object[] { loginResult.User.Id }, cancellationToken);
             if (user == null) return new AuthResultDto { Success = false, ErrorMessage = "User not found." };
 
             // Check if MFA is enabled
             if (user.MfaEnabled)
             {
-                var isValidMfa = await VerifyMfaCodeAsync(user.Id, mfaCode);
+                var isValidMfa = await VerifyMfaCodeAsync(user.Id, mfaCode, cancellationToken);
                 if (!isValidMfa)
                 {
                     await _auditService.LogAsync(
@@ -628,7 +642,8 @@ return isValid;
                         null,
                         null,
                         "Invalid MFA code",
-                        null
+                        null,
+                        cancellationToken
                     );
                     return new AuthResultDto { Success = false, ErrorMessage = "Invalid MFA code. Please try again." };
                 }
