@@ -184,6 +184,13 @@ namespace Zentic.Web.Controllers
                     ModelState.AddModelError("EscalateToUserId", "Escalation target user not found or inactive.");
             }
 
+            if (dto.DepartmentId.HasValue)
+            {
+                var dept = await _deptRepo.GetByIdAsync(dto.DepartmentId.Value);
+                if (dept == null || !dept.IsActive)
+                    ModelState.AddModelError("DepartmentId", "Selected department not found or inactive.");
+            }
+
             if (!ModelState.IsValid)
             {
                 await PopulateDropdowns();
