@@ -72,8 +72,8 @@ namespace Zentic.Web.Controllers
 
                         if (useCache)
                         {
-                            pendingCount = cached.PendingCount;
-                            flaggedCount = cached.FlaggedCount;
+                            pendingCount = cached!.PendingCount;
+                            flaggedCount = cached!.FlaggedCount;
                         }
                         else
                         {
