@@ -436,6 +436,22 @@ namespace Zentic.Infrastructure.Services
                 requisition.ApproverId = approverId;
                 requisition.ApprovedAt = now;
                 requisition.ApprovalNotes = notes;
+
+                // Record price history so future fraud-detection benchmarking has data
+                if (requisition.VendorId.HasValue)
+                {
+                    var priceHistory = new PriceHistory
+                    {
+                        VendorId = requisition.VendorId.Value,
+                        RequisitionId = requisition.Id,
+                        ItemDescription = requisition.Title,
+                        Price = requisition.Amount,
+                        PurchaseDate = now,
+                        CreatedAt = now,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _db.PriceHistories.Add(priceHistory);
+                }
             }
             else
             {
