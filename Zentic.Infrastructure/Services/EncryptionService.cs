@@ -17,6 +17,7 @@ namespace Zentic.Infrastructure.Services
         private const string KeyIdPrefix = "ZENC";
         
         private readonly Dictionary<string, byte[]> _keys = new();
+        private readonly object _keyLock = new();
         private string _currentKeyId;
 
         public EncryptionService(string base64Key)
@@ -35,7 +36,13 @@ namespace Zentic.Infrastructure.Services
         {
             if (string.IsNullOrEmpty(plaintext)) return plaintext;
 
-            var key = _keys[_currentKeyId];
+            byte[] key;
+            string currentKeyId;
+            lock (_keyLock)
+            {
+                key = _keys[_currentKeyId];
+                currentKeyId = _currentKeyId;
+            }
             var nonce = RandomNumberGenerator.GetBytes(NonceSize);
             
             using var aes = new AesGcm(key, TagSize);
@@ -46,7 +53,7 @@ namespace Zentic.Infrastructure.Services
             aes.Encrypt(nonce, plainBytes, cipherBytes, tag);
 
             // Format: keyId + ':' + nonce + ciphertext + tag
-            var keyIdBytes = Encoding.UTF8.GetBytes(_currentKeyId);
+            var keyIdBytes = Encoding.UTF8.GetBytes(currentKeyId);
             var result = new byte[keyIdBytes.Length + 1 + NonceSize + cipherBytes.Length + TagSize];
             Buffer.BlockCopy(keyIdBytes, 0, result, 0, keyIdBytes.Length);
             result[keyIdBytes.Length] = (byte)':'; // delimiter
@@ -67,17 +74,25 @@ namespace Zentic.Infrastructure.Services
                 
                 // Try to parse key ID from the beginning
                 var delimiterIndex = Array.IndexOf(fullBytes, (byte)':');
-                if (delimiterIndex > 0 && delimiterIndex < 50) // reasonable key ID length
+                if (delimiterIndex > 0 && delimiterIndex < 50)
                 {
                     var keyId = Encoding.UTF8.GetString(fullBytes, 0, delimiterIndex);
-                    if (_keys.TryGetValue(keyId, out var key))
+                    lock (_keyLock)
                     {
-                        return DecryptWithKey(fullBytes, delimiterIndex + 1, key);
+                        if (_keys.TryGetValue(keyId, out var key))
+                            return DecryptWithKey(fullBytes, delimiterIndex + 1, key);
                     }
                 }
 
                 // Fallback to current key (for legacy data without key ID)
-                return DecryptWithKey(fullBytes, 0, _keys[_currentKeyId]);
+                lock (_keyLock)
+                {
+                    return DecryptWithKey(fullBytes, 0, _keys[_currentKeyId]);
+                }
+            }
+            catch (CryptographicException)
+            {
+                throw;
             }
             catch
             {
@@ -139,9 +154,11 @@ namespace Zentic.Infrastructure.Services
             ValidateKey(newKeyBytes);
 
             var newKeyId = DeriveKeyId(newKeyBytes);
-            _keys[newKeyId] = newKeyBytes;
-            _currentKeyId = newKeyId; // New encryptions will use the new key
-            // Note: In production, persist key rotation to a secure key store
+            lock (_keyLock)
+            {
+                _keys[newKeyId] = newKeyBytes;
+                _currentKeyId = newKeyId;
+            }
         }
 
         /// <summary>
