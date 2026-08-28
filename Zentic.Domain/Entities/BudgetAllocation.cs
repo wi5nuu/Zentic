@@ -37,8 +37,8 @@ namespace Zentic.Domain.Entities
 
         // Alerts
         public decimal WarningThresholdPercentage { get; set; } = 80; // Alert at 80%
-        public bool IsOverBudget => SpentAmount > AllocatedAmount;
-        public decimal UtilizationPercentage => AllocatedAmount > 0 ? (SpentAmount / AllocatedAmount) * 100 : 0;
+        public bool IsOverBudget => SpentAmount + CommittedAmount > AllocatedAmount;
+        public decimal UtilizationPercentage => AllocatedAmount > 0 ? ((SpentAmount + CommittedAmount) / AllocatedAmount) * 100 : 0;
 
         // Navigation
         public ICollection<ExpenseRequisition> Requisitions { get; set; } = new List<ExpenseRequisition>();
