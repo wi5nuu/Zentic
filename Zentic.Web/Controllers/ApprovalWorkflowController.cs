@@ -217,6 +217,13 @@ namespace Zentic.Web.Controllers
                         break;
                 }
 
+                if (step.ApproverType == ApproverType.DepartmentHead && step.DepartmentId.HasValue)
+                {
+                    var dept = _deptRepo.GetByIdAsync(step.DepartmentId.Value).GetAwaiter().GetResult();
+                    if (dept == null || !dept.IsActive)
+                        ModelState.AddModelError($"Steps[{i}].DepartmentId", $"Step {i + 1}: selected department not found or inactive.");
+                }
+
                 if (step.EscalationRuleId.HasValue && step.EscalationRuleId.Value > 0)
                 {
                     // Note: Actual existence check would require async DB call, validated in service
