@@ -102,8 +102,8 @@
 
         function esc(s) {
             return String(s == null ? '' : s)
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                .replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>')
+                .replace(/"/g, '"').replace(/'/g, ''');
         }
 
         function toggleTypeFields(row, typeId) {
@@ -119,8 +119,9 @@
                 row.querySelectorAll('[name]').forEach(function (el) {
                     el.name = el.name.replace(/Steps\[\d+\]/g, 'Steps[' + idx + ']');
                 });
-                row.querySelectorAll('.form-check-input[id]').forEach(function (el) {
-                    el.id = el.id.replace(/__\d+$/, '_' + idx);
+                row.querySelectorAll('[id], [for]').forEach(function (el) {
+                    if (el.id) el.id = el.id.replace(/_\d+$/, '_' + idx);
+                    if (el.getAttribute('for')) el.setAttribute('for', el.getAttribute('for').replace(/_\d+$/, '_' + idx));
                 });
             });
         }
@@ -128,6 +129,7 @@
         function addStep(data) {
             data = data || {};
             var html = template
+                .split('__IDX__').join('0')
                 .split('__name__').join(esc(data.name))
                 .split('__desc__').join(esc(data.description))
                 .split('__users__').join(opts(users, '— Select user —', data.specificUserId))
@@ -152,6 +154,7 @@
                 row.remove();
                 reindex();
             });
+            reindex();
             return row;
         }
 
