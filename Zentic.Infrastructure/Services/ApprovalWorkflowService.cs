@@ -4,6 +4,7 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -13,13 +14,15 @@ namespace Zentic.Infrastructure.Services
         private readonly IAuditService _auditService;
         private readonly INotificationService _notificationService;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IConfiguration _configuration;
 
-        public ApprovalWorkflowService(AppDbContext db, IAuditService auditService, INotificationService notificationService, IUnitOfWork unitOfWork)
+        public ApprovalWorkflowService(AppDbContext db, IAuditService auditService, INotificationService notificationService, IUnitOfWork unitOfWork, IConfiguration configuration)
         {
             _db = db;
             _auditService = auditService;
             _notificationService = notificationService;
             _unitOfWork = unitOfWork;
+            _configuration = configuration;
         }
 
         public async Task<ApprovalWorkflowDto> CreateWorkflowAsync(CreateApprovalWorkflowDto dto, int createdById, CancellationToken cancellationToken = default)
@@ -417,6 +420,18 @@ namespace Zentic.Infrastructure.Services
 
             if (action == ApprovalAction.Approve)
             {
+                // 3-way matching rule: amount above threshold requires at least 2 vendor quotations
+                if (requisition.VendorId.HasValue && requisition.Amount >= GetMultipleQuotationThreshold())
+                {
+                    var quotationCount = await _db.RequisitionQuotations.CountAsync(q => q.RequisitionId == requisitionId && !q.IsDeleted, cancellationToken);
+                    if (quotationCount < 2)
+                        return new ApprovalResultDto
+                        {
+                            Success = false,
+                            Message = $"Requisitions of {GetMultipleQuotationThreshold():N0} IDR or more require at least 2 vendor quotations before approval."
+                        };
+                }
+
                 requisition.Status = RequisitionStatus.Approved;
                 requisition.ApproverId = approverId;
                 requisition.ApprovedAt = now;
@@ -650,6 +665,13 @@ namespace Zentic.Infrastructure.Services
                 .ToListAsync(cancellationToken);
 
             return rules.Select(MapToDto).ToList();
+        }
+
+        private decimal GetMultipleQuotationThreshold()
+        {
+            if (decimal.TryParse(_configuration["AppSettings:MultipleQuotationThreshold"], out var threshold) && threshold > 0)
+                return threshold;
+            return 50_000_000m;
         }
     }
 }
