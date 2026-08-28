@@ -127,6 +127,7 @@ namespace Zentic.Application.DTOs
         public decimal CommittedAmount { get; set; }
         public decimal AvailableAmount { get; set; }
         public decimal UtilizationPercentage { get; set; }
+        public decimal WarningThresholdPercentage { get; set; } = 80;
         public string Currency { get; set; } = string.Empty;
         public string PeriodType { get; set; } = string.Empty;
         public int FiscalYear { get; set; }
@@ -139,7 +140,7 @@ namespace Zentic.Application.DTOs
         public bool IsActive { get; set; }
         public bool IsApproved { get; set; }
         public bool IsOverBudget { get; set; }
-        public bool IsNearLimit => UtilizationPercentage >= 80;
+        public bool IsNearLimit => UtilizationPercentage >= WarningThresholdPercentage;
     }
 
     public class CreateBudgetAllocationDto
