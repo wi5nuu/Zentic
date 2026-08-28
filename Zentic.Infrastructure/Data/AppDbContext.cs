@@ -380,9 +380,10 @@ namespace Zentic.Infrastructure.Data
             // NumberSequence configuration
             modelBuilder.Entity<NumberSequence>(entity =>
             {
-                entity.HasIndex(e => e.SequenceName).IsUnique();
+                entity.HasIndex(e => new { e.SequenceName, e.YearMonth }).IsUnique();
                 entity.Property(e => e.SequenceName).HasMaxLength(100);
                 entity.Property(e => e.Prefix).HasMaxLength(20);
+                entity.Property(e => e.YearMonth).HasMaxLength(6);
             });
 
             // Approval Workflow entities
