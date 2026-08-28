@@ -135,8 +135,10 @@ namespace Zentic.Infrastructure.Services
             vendor.BankName = dto.BankName;
             vendor.BankAccountHolderName = dto.BankAccountHolderName;
 
-            if (dto.BankAccountNumber != null)
+            if (!string.IsNullOrWhiteSpace(dto.BankAccountNumber))
                 vendor.BankAccountNumber = _encryption.Encrypt(dto.BankAccountNumber);
+            else
+                vendor.BankAccountNumber = null;
 
             vendor.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(cancellationToken);
