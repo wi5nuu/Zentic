@@ -4,7 +4,6 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -49,6 +48,7 @@ namespace Zentic.Infrastructure.Services
                 for (int i = 0; i < dto.Steps.Count; i++)
                 {
                     var stepDto = dto.Steps[i];
+                    var stepNow = DateTime.UtcNow;
                     var step = new ApprovalStep
                     {
                         WorkflowId = workflow.Id,
@@ -63,8 +63,8 @@ namespace Zentic.Infrastructure.Services
                         RequireAllApprovers = stepDto.RequireAllApprovers,
                         EscalationRuleId = stepDto.EscalationRuleId,
                         IsParallel = stepDto.IsParallel,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
+                        CreatedAt = stepNow,
+                        UpdatedAt = stepNow
                     };
                     _db.ApprovalSteps.Add(step);
                 }
@@ -143,7 +143,8 @@ namespace Zentic.Infrastructure.Services
                 workflow.MinAmount = dto.MinAmount;
                 workflow.MaxAmount = dto.MaxAmount;
                 workflow.Priority = dto.Priority;
-                workflow.UpdatedAt = DateTime.UtcNow;
+                var now = DateTime.UtcNow;
+                workflow.UpdatedAt = now;
 
                 // Remove existing steps
                 _db.ApprovalSteps.RemoveRange(workflow.Steps);
@@ -166,8 +167,8 @@ namespace Zentic.Infrastructure.Services
                         RequireAllApprovers = stepDto.RequireAllApprovers,
                         EscalationRuleId = stepDto.EscalationRuleId,
                         IsParallel = stepDto.IsParallel,
-                        CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
+                        CreatedAt = now,
+                        UpdatedAt = now
                     };
                     _db.ApprovalSteps.Add(step);
                 }
@@ -195,9 +196,10 @@ namespace Zentic.Infrastructure.Services
                 var workflow = await _db.ApprovalWorkflows.FindAsync(new object[] { id }, cancellationToken);
                 if (workflow == null) return false;
 
+                var now = DateTime.UtcNow;
                 workflow.IsDeleted = true;
-                workflow.DeletedAt = DateTime.UtcNow;
-                workflow.UpdatedAt = DateTime.UtcNow;
+                workflow.DeletedAt = now;
+                workflow.UpdatedAt = now;
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await _unitOfWork.CommitAsync(cancellationToken);
@@ -219,6 +221,7 @@ namespace Zentic.Infrastructure.Services
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
+                var now = DateTime.UtcNow;
                 var rule = new EscalationRule
                 {
                     Name = dto.Name,
@@ -234,8 +237,8 @@ namespace Zentic.Infrastructure.Services
                     NotifyOriginalApprover = dto.NotifyOriginalApprover,
                     NotifyEscalationTarget = dto.NotifyEscalationTarget,
                     CustomMessage = dto.CustomMessage,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    CreatedAt = now,
+                    UpdatedAt = now
                 };
 
                 _db.EscalationRules.Add(rule);
@@ -278,6 +281,7 @@ namespace Zentic.Infrastructure.Services
                 if (existing != null)
                     throw new InvalidOperationException("An active delegation already exists for this period.");
 
+                var now = DateTime.UtcNow;
                 var delegation = new ApprovalDelegation
                 {
                     DelegatorId = delegatorId,
@@ -288,8 +292,8 @@ namespace Zentic.Infrastructure.Services
                     DepartmentId = dto.DepartmentId,
                     MaxAmount = dto.MaxAmount,
                     IsActive = true,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    CreatedAt = now,
+                    UpdatedAt = now
                 };
 
                 _db.ApprovalDelegations.Add(delegation);

@@ -4,7 +4,6 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {

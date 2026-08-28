@@ -6,7 +6,6 @@ using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {

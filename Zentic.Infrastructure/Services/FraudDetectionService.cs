@@ -3,7 +3,6 @@ using Zentic.Application.Interfaces;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {

@@ -6,7 +6,6 @@ using Zentic.Infrastructure.Data;
 using Zentic.Infrastructure.Helpers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -203,15 +202,15 @@ namespace Zentic.Infrastructure.Services
                 PaidAt = req.PaidAt,
                 ApprovalNotes = req.ApprovalNotes,
                 RejectionReason = req.RejectionReason,
-                RequesterName = req.Requester!.FullName,
-                RequesterEmail = req.Requester!.Email,
+                RequesterName = req.Requester?.FullName ?? "Unknown",
+                RequesterEmail = req.Requester?.Email ?? "Unknown",
                 ApproverName = req.Approver?.FullName,
-                DepartmentName = req.Department!.Name,
+                DepartmentName = req.Department?.Name ?? "Unknown",
                 VendorName = req.Vendor?.Name,
                 VendorId = req.VendorId,
                 ApprovalHistory = req.ApprovalHistory.OrderBy(h => h.Timestamp).Select(h => new ApprovalHistoryDto
                 {
-                    ActorName = h.Actor!.FullName,
+                    ActorName = h.Actor?.FullName ?? "Unknown",
                     Action = h.Action.ToString(),
                     FromStatus = h.FromStatus.ToString(),
                     ToStatus = h.ToStatus.ToString(),
@@ -241,6 +240,7 @@ namespace Zentic.Infrastructure.Services
             if (department == null)
                 throw new InvalidOperationException("Department not found.");
 
+            var now = DateTime.UtcNow;
             var requisition = new ExpenseRequisition
             {
                 RequisitionNumber = await GenerateRequisitionNumberAsync(cancellationToken),
@@ -254,8 +254,8 @@ namespace Zentic.Infrastructure.Services
                 Status = RequisitionStatus.Draft,
                 HasConflictOfInterest = dto.HasConflictOfInterest,
                 ConflictOfInterestDetails = dto.ConflictOfInterestDetails,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = now,
+                UpdatedAt = now
             };
 
             if (dto.VendorId.HasValue)
@@ -272,7 +272,7 @@ namespace Zentic.Infrastructure.Services
                 if (await _fraudDetection.IsStructuringPatternAsync(userId, dto.VendorId.Value, dto.Amount, cancellationToken))
                 {
                     requisition.IsFlaggedForReview = true;
-                    requisition.FlagReason = (requisition.FlagReason ?? "") + " Possible structuring pattern detected.";
+                    requisition.FlagReason = $"{requisition.FlagReason} Possible structuring pattern detected.";
                 }
             }
 
@@ -286,6 +286,7 @@ namespace Zentic.Infrastructure.Services
                     System.Security.Cryptography.SHA256.HashData(
                         System.Text.Encoding.UTF8.GetBytes($"{userId}:{created.Id}:{created.CreatedAt:O}")));
 
+                var declarationNow = DateTime.UtcNow;
                 var declaration = new ConflictOfInterestDeclaration
                 {
                     RequisitionId = created.Id,
@@ -293,9 +294,9 @@ namespace Zentic.Infrastructure.Services
                     HasConflict = dto.HasConflictOfInterest,
                     ConflictDescription = dto.ConflictOfInterestDetails,
                     SignatureHash = signature,
-                    DeclaredAt = DateTime.UtcNow,
-                    CreatedAt = DateTime.UtcNow,
-                    UpdatedAt = DateTime.UtcNow
+                    DeclaredAt = declarationNow,
+                    CreatedAt = declarationNow,
+                    UpdatedAt = declarationNow
                 };
                 _db.ConflictOfInterestDeclarations.Add(declaration);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -331,9 +332,10 @@ namespace Zentic.Infrastructure.Services
             if (req.Status != RequisitionStatus.Draft) throw new InvalidOperationException("Only draft requisitions can be submitted.");
 
             var oldStatus = req.Status;
+            var now = DateTime.UtcNow;
             req.Status = req.IsFlaggedForReview ? RequisitionStatus.UnderReview : RequisitionStatus.Submitted;
-            req.SubmittedAt = DateTime.UtcNow;
-            req.UpdatedAt = DateTime.UtcNow;
+            req.SubmittedAt = now;
+            req.UpdatedAt = now;
 
             await _requisitionRepo.UpdateAsync(req, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -364,11 +366,12 @@ namespace Zentic.Infrastructure.Services
             }
 
             var oldStatus = req.Status;
+            var now = DateTime.UtcNow;
             req.Status = RequisitionStatus.Approved;
             req.ApproverId = approverId;
-            req.ApprovedAt = DateTime.UtcNow;
+            req.ApprovedAt = now;
             req.ApprovalNotes = notes;
-            req.UpdatedAt = DateTime.UtcNow;
+            req.UpdatedAt = now;
 
             await _requisitionRepo.UpdateAsync(req, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -382,8 +385,8 @@ namespace Zentic.Infrastructure.Services
                     RequisitionId = req.Id,
                     ItemDescription = req.Title,
                     Price = req.Amount,
-                    PurchaseDate = DateTime.UtcNow,
-                    CreatedAt = DateTime.UtcNow,
+                    PurchaseDate = now,
+                    CreatedAt = now,
                     UpdatedAt = DateTime.UtcNow
                 };
                 _db.PriceHistories.Add(priceHistory);
@@ -407,9 +410,10 @@ namespace Zentic.Infrastructure.Services
                 throw new UnauthorizedAccessException("Only Finance and Admin users can mark requisitions as paid.");
 
             var oldStatus = req.Status;
+            var now = DateTime.UtcNow;
             req.Status = RequisitionStatus.Paid;
-            req.PaidAt = DateTime.UtcNow;
-            req.UpdatedAt = DateTime.UtcNow;
+            req.PaidAt = now;
+            req.UpdatedAt = now;
 
             await _requisitionRepo.UpdateAsync(req, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -510,7 +514,7 @@ namespace Zentic.Infrastructure.Services
             await _db.SaveChangesAsync(cancellationToken);
 
             await _auditService.LogAsync(AuditEventType.Update, nameof(RequisitionQuotation), quotationId.ToString(),
-                userId, null, null, null, "Quotation selected" + (string.IsNullOrWhiteSpace(reason) ? "" : $": {reason}"), requisitionId, cancellationToken);
+                userId, null, null, null, $"Quotation selected{(string.IsNullOrWhiteSpace(reason) ? "" : $": {reason}")}", requisitionId, cancellationToken);
         }
 
         public async Task RejectAsync(int id, int approverId, string reason, CancellationToken cancellationToken = default)
@@ -527,11 +531,12 @@ namespace Zentic.Infrastructure.Services
                 throw new UnauthorizedAccessException("You are not authorized to reject this requisition.");
 
             var oldStatus = req.Status;
+            var now = DateTime.UtcNow;
             req.Status = RequisitionStatus.Rejected;
             req.ApproverId = approverId;
-            req.RejectedAt = DateTime.UtcNow;
+            req.RejectedAt = now;
             req.RejectionReason = reason;
-            req.UpdatedAt = DateTime.UtcNow;
+            req.UpdatedAt = now;
 
             await _requisitionRepo.UpdateAsync(req, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -579,6 +584,7 @@ namespace Zentic.Infrastructure.Services
 
                     if (sequence == null)
                     {
+                        var seqNow = DateTime.UtcNow;
                         sequence = new NumberSequence
                         {
                             SequenceName = "ExpenseRequisition",
@@ -589,8 +595,8 @@ namespace Zentic.Infrastructure.Services
                             MinValue = 1,
                             MaxValue = 9999,
                             Cycle = false,
-                            CreatedAt = DateTime.UtcNow,
-                            UpdatedAt = DateTime.UtcNow
+                            CreatedAt = seqNow,
+                            UpdatedAt = seqNow
                         };
                         _db.NumberSequences.Add(sequence);
                         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -604,8 +610,9 @@ namespace Zentic.Infrastructure.Services
                     }
 
                     sequence.CurrentValue = nextValue;
-                    sequence.LastUsedAt = DateTime.UtcNow;
-                    sequence.UpdatedAt = DateTime.UtcNow;
+                    var updateNow = DateTime.UtcNow;
+                    sequence.LastUsedAt = updateNow;
+                    sequence.UpdatedAt = updateNow;
 
                     await _unitOfWork.SaveChangesAsync(cancellationToken);
                     await _unitOfWork.CommitAsync(cancellationToken);

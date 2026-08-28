@@ -10,7 +10,6 @@ using Microsoft.Extensions.Options;
 using OtpNet;
 using QRCoder;
 using System.Security.Cryptography;
-using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {

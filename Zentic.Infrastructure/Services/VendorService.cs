@@ -4,7 +4,6 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
-using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -93,6 +92,7 @@ namespace Zentic.Infrastructure.Services
             if (await _db.Vendors.AnyAsync(v => v.Code == dto.Code && !v.IsDeleted, cancellationToken))
                 throw new InvalidOperationException($"Vendor code '{dto.Code}' already exists.");
 
+            var now = DateTime.UtcNow;
             var vendor = new Vendor
             {
                 Name = dto.Name,
@@ -107,8 +107,8 @@ namespace Zentic.Infrastructure.Services
                     ? _encryption.Encrypt(dto.BankAccountNumber)
                     : null,
                 Status = VendorStatus.PendingVerification,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = now,
+                UpdatedAt = now
             };
 
             _db.Vendors.Add(vendor);
@@ -151,8 +151,9 @@ namespace Zentic.Infrastructure.Services
 
             vendor.Status = VendorStatus.Active;
             vendor.VerifiedById = verifiedByUserId;
-            vendor.VerifiedAt = DateTime.UtcNow;
-            vendor.UpdatedAt = DateTime.UtcNow;
+            var now = DateTime.UtcNow;
+            vendor.VerifiedAt = now;
+            vendor.UpdatedAt = now;
             await _db.SaveChangesAsync(cancellationToken);
         }
 
