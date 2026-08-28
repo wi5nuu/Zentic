@@ -2,6 +2,7 @@ using Zentic.Application.Interfaces;
 using Zentic.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Zentic.Infrastructure.Data;
+using System.Threading;
 
 namespace Zentic.Infrastructure.Repositories
 {
@@ -16,26 +17,27 @@ namespace Zentic.Infrastructure.Repositories
             _set = db.Set<T>();
         }
 
-        public async Task<T?> GetByIdAsync(int id) =>
-            await _set.FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted);
+        public async Task<T?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
+            await _set.FirstOrDefaultAsync(e => e.Id == id && !e.IsDeleted, cancellationToken);
 
-        public async Task<List<T>> GetAllAsync() =>
-            await _set.Where(e => !e.IsDeleted).ToListAsync();
+        public async Task<List<T>> GetAllAsync(CancellationToken cancellationToken = default) =>
+            await _set.Where(e => !e.IsDeleted).ToListAsync(cancellationToken);
 
-        public async Task<T> AddAsync(T entity)
+        public async Task<T> AddAsync(T entity, CancellationToken cancellationToken = default)
         {
-            await _set.AddAsync(entity);
+            await _set.AddAsync(entity, cancellationToken);
             return entity;
         }
 
-        public async Task UpdateAsync(T entity)
+        public async Task UpdateAsync(T entity, CancellationToken cancellationToken = default)
         {
             _set.Update(entity);
+            await Task.CompletedTask;
         }
 
-        public async Task SoftDeleteAsync(int id)
+        public async Task SoftDeleteAsync(int id, CancellationToken cancellationToken = default)
         {
-            var entity = await GetByIdAsync(id);
+            var entity = await GetByIdAsync(id, cancellationToken);
             if (entity != null)
             {
                 entity.IsDeleted = true;

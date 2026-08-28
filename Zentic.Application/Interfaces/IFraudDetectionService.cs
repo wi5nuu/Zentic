@@ -1,4 +1,5 @@
 using Zentic.Application.DTOs;
+using System.Threading;
 
 namespace Zentic.Application.Interfaces
 {
@@ -11,12 +12,12 @@ namespace Zentic.Application.Interfaces
         /// Cek apakah harga yang diajukan jauh melebihi benchmark historis.
         /// Return null jika tidak ada histori cukup untuk dibandingkan.
         /// </summary>
-        Task<PriceCheckResult> CheckPriceAsync(int vendorId, decimal requestedAmount, string itemDescription);
+        Task<PriceCheckResult> CheckPriceAsync(int vendorId, decimal requestedAmount, string itemDescription, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Deteksi pola structuring: requisition berulang ke vendor sama
         /// dengan nominal mendekati threshold approval.
         /// </summary>
-        Task<bool> IsStructuringPatternAsync(int requesterId, int vendorId, decimal amount);
+        Task<bool> IsStructuringPatternAsync(int requesterId, int vendorId, decimal amount, CancellationToken cancellationToken = default);
     }
 }

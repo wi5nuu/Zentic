@@ -6,6 +6,7 @@ using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -26,7 +27,8 @@ namespace Zentic.Infrastructure.Services
 
         public async Task LogAsync(AuditEventType eventType, string entityName, string entityId,
             int userId, string? ipAddress = null, string? oldValues = null,
-            string? newValues = null, string? notes = null, int? requisitionId = null)
+            string? newValues = null, string? notes = null, int? requisitionId = null,
+            CancellationToken cancellationToken = default)
         {
             var log = new AuditLog
             {
@@ -53,7 +55,7 @@ namespace Zentic.Infrastructure.Services
             }
         }
 
-        public async Task FlushAsync()
+        public async Task FlushAsync(CancellationToken cancellationToken = default)
         {
             List<AuditLog> logsToFlush;
             lock (_lock)
@@ -65,8 +67,8 @@ namespace Zentic.Infrastructure.Services
 
             try
             {
-                await _db.AuditLogs.AddRangeAsync(logsToFlush);
-                await _db.SaveChangesAsync();
+                await _db.AuditLogs.AddRangeAsync(logsToFlush, cancellationToken);
+                await _db.SaveChangesAsync(cancellationToken);
             }
             catch (Exception ex)
             {
@@ -78,9 +80,9 @@ namespace Zentic.Infrastructure.Services
             }
         }
 
-        public async Task<PaginatedResult<AuditLogDto>> GetPagedAsync(AuditFilterDto filter)
+        public async Task<PaginatedResult<AuditLogDto>> GetPagedAsync(AuditFilterDto filter, CancellationToken cancellationToken = default)
         {
-            await FlushAsync();
+            await FlushAsync(cancellationToken);
 
             var query = _db.AuditLogs
                 .Include(a => a.User)
@@ -98,7 +100,7 @@ namespace Zentic.Infrastructure.Services
             if (filter.To.HasValue)
                 query = query.Where(a => a.Timestamp <= filter.To);
 
-            var totalCount = await query.CountAsync();
+            var totalCount = await query.CountAsync(cancellationToken);
 
             var items = await query
                 .OrderByDescending(a => a.Timestamp)
@@ -116,7 +118,7 @@ namespace Zentic.Infrastructure.Services
                     Notes = a.Notes,
                     ChangedFields = string.IsNullOrEmpty(a.OldValues) && string.IsNullOrEmpty(a.NewValues) ? null : $"{a.OldValues} -> {a.NewValues}"
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return new PaginatedResult<AuditLogDto>
             {
@@ -136,7 +138,7 @@ namespace Zentic.Infrastructure.Services
         public async Task StopAsync(CancellationToken cancellationToken)
         {
             _flushTimer?.Change(Timeout.Infinite, 0);
-            await FlushAsync();
+            await FlushAsync(cancellationToken);
             _flushTimer?.Dispose();
         }
 

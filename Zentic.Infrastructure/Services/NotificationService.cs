@@ -4,6 +4,7 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -18,7 +19,7 @@ namespace Zentic.Infrastructure.Services
             _notificationRepo = notificationRepo;
         }
 
-        public async Task<NotificationDto> CreateAsync(CreateNotificationDto dto, int createdById)
+        public async Task<NotificationDto> CreateAsync(CreateNotificationDto dto, int createdById, CancellationToken cancellationToken = default)
         {
             var notification = new Notification
             {
@@ -36,16 +37,16 @@ namespace Zentic.Infrastructure.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _notificationRepo.AddAsync(notification);
-            await _db.SaveChangesAsync();
+            await _notificationRepo.AddAsync(notification, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
 
             // Try to send notification immediately
-            await SendNotificationAsync(notification.Id);
+            await SendNotificationAsync(notification.Id, cancellationToken);
 
             return MapToDto(notification);
         }
 
-        public async Task<List<NotificationDto>> GetUserNotificationsAsync(int userId, bool unreadOnly = false, int limit = 50)
+        public async Task<List<NotificationDto>> GetUserNotificationsAsync(int userId, bool unreadOnly = false, int limit = 50, CancellationToken cancellationToken = default)
         {
             var query = _notificationRepo.Query()
                 .Where(n => n.RecipientId == userId);
@@ -58,20 +59,20 @@ namespace Zentic.Infrastructure.Services
             var notifications = await query
                 .OrderByDescending(n => n.CreatedAt)
                 .Take(limit)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return notifications.Select(MapToDto).ToList();
         }
 
-        public async Task<int> GetUnreadCountAsync(int userId)
+        public async Task<int> GetUnreadCountAsync(int userId, CancellationToken cancellationToken = default)
         {
             return await _notificationRepo.Query()
-                .CountAsync(n => n.RecipientId == userId && !n.IsRead);
+                .CountAsync(n => n.RecipientId == userId && !n.IsRead, cancellationToken);
         }
 
-        public async Task<bool> MarkAsReadAsync(int notificationId, int userId)
+        public async Task<bool> MarkAsReadAsync(int notificationId, int userId, CancellationToken cancellationToken = default)
         {
-            var notification = await _notificationRepo.GetByIdAsync(notificationId);
+            var notification = await _notificationRepo.GetByIdAsync(notificationId, cancellationToken);
             
             if (notification == null || notification.RecipientId != userId)
                 return false;
@@ -79,17 +80,17 @@ namespace Zentic.Infrastructure.Services
             notification.IsRead = true;
             notification.ReadAt = DateTime.UtcNow;
             
-            await _notificationRepo.UpdateAsync(notification);
-            await _db.SaveChangesAsync();
+            await _notificationRepo.UpdateAsync(notification, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
 
             return true;
         }
 
-        public async Task<bool> MarkAllAsReadAsync(int userId)
+        public async Task<bool> MarkAllAsReadAsync(int userId, CancellationToken cancellationToken = default)
         {
             var notifications = await _notificationRepo.Query()
                 .Where(n => n.RecipientId == userId && !n.IsRead)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             foreach (var notification in notifications)
             {
@@ -97,28 +98,28 @@ namespace Zentic.Infrastructure.Services
                 notification.ReadAt = DateTime.UtcNow;
             }
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
             return true;
         }
 
-        public async Task<bool> DeleteAsync(int notificationId, int userId)
+        public async Task<bool> DeleteAsync(int notificationId, int userId, CancellationToken cancellationToken = default)
         {
-            var notification = await _notificationRepo.GetByIdAsync(notificationId);
+            var notification = await _notificationRepo.GetByIdAsync(notificationId, cancellationToken);
             
             if (notification == null || notification.RecipientId != userId)
                 return false;
 
-            await _notificationRepo.SoftDeleteAsync(notificationId);
-            await _db.SaveChangesAsync();
+            await _notificationRepo.SoftDeleteAsync(notificationId, cancellationToken);
+            await _db.SaveChangesAsync(cancellationToken);
 
             return true;
         }
 
-        public async Task SendNotificationAsync(int notificationId)
+        public async Task SendNotificationAsync(int notificationId, CancellationToken cancellationToken = default)
         {
             var notification = await _db.Notifications
                 .Include(n => n.Recipient)
-                .FirstOrDefaultAsync(n => n.Id == notificationId);
+                .FirstOrDefaultAsync(n => n.Id == notificationId, cancellationToken);
 
             if (notification == null || notification.IsSent)
                 return;
@@ -153,14 +154,14 @@ namespace Zentic.Infrastructure.Services
                 notification.SentAt = null;
             }
 
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task NotifyRequisitionSubmittedAsync(int requisitionId, int managerId)
+        public async Task NotifyRequisitionSubmittedAsync(int requisitionId, int managerId, CancellationToken cancellationToken = default)
         {
             var requisition = await _db.ExpenseRequisitions
                 .Include(r => r.Requester)
-                .FirstOrDefaultAsync(r => r.Id == requisitionId);
+                .FirstOrDefaultAsync(r => r.Id == requisitionId, cancellationToken);
 
             if (requisition == null) return;
 
@@ -174,14 +175,14 @@ namespace Zentic.Infrastructure.Services
                 EntityType = nameof(ExpenseRequisition),
                 EntityId = requisitionId.ToString(),
                 ActionUrl = $"/Expense/Details/{requisitionId}"
-            }, 0);
+            }, 0, cancellationToken);
         }
 
-        public async Task NotifyRequisitionApprovedAsync(int requisitionId)
+        public async Task NotifyRequisitionApprovedAsync(int requisitionId, CancellationToken cancellationToken = default)
         {
             var requisition = await _db.ExpenseRequisitions
                 .Include(r => r.Requester)
-                .FirstOrDefaultAsync(r => r.Id == requisitionId);
+                .FirstOrDefaultAsync(r => r.Id == requisitionId, cancellationToken);
 
             if (requisition == null) return;
 
@@ -195,14 +196,14 @@ namespace Zentic.Infrastructure.Services
                 EntityType = nameof(ExpenseRequisition),
                 EntityId = requisitionId.ToString(),
                 ActionUrl = $"/Expense/Details/{requisitionId}"
-            }, 0);
+            }, 0, cancellationToken);
         }
 
-        public async Task NotifyRequisitionRejectedAsync(int requisitionId, string reason)
+        public async Task NotifyRequisitionRejectedAsync(int requisitionId, string reason, CancellationToken cancellationToken = default)
         {
             var requisition = await _db.ExpenseRequisitions
                 .Include(r => r.Requester)
-                .FirstOrDefaultAsync(r => r.Id == requisitionId);
+                .FirstOrDefaultAsync(r => r.Id == requisitionId, cancellationToken);
 
             if (requisition == null) return;
 
@@ -216,15 +217,15 @@ namespace Zentic.Infrastructure.Services
                 EntityType = nameof(ExpenseRequisition),
                 EntityId = requisitionId.ToString(),
                 ActionUrl = $"/Expense/Details/{requisitionId}"
-            }, 0);
+            }, 0, cancellationToken);
         }
 
-        public async Task NotifyPaymentCompletedAsync(int paymentId)
+        public async Task NotifyPaymentCompletedAsync(int paymentId, CancellationToken cancellationToken = default)
         {
             var payment = await _db.Payments
                 .Include(p => p.Requisition)
                     .ThenInclude(r => r!.Requester)
-                .FirstOrDefaultAsync(p => p.Id == paymentId);
+                .FirstOrDefaultAsync(p => p.Id == paymentId, cancellationToken);
 
             if (payment?.Requisition == null) return;
 
@@ -238,15 +239,15 @@ namespace Zentic.Infrastructure.Services
                 EntityType = nameof(Payment),
                 EntityId = paymentId.ToString(),
                 ActionUrl = $"/Expense/Details/{payment.RequisitionId}"
-            }, 0);
+            }, 0, cancellationToken);
         }
 
-        public async Task NotifyBudgetThresholdExceededAsync(int budgetId, decimal utilizationPercentage)
+        public async Task NotifyBudgetThresholdExceededAsync(int budgetId, decimal utilizationPercentage, CancellationToken cancellationToken = default)
         {
             var budget = await _db.BudgetAllocations
                 .Include(b => b.Department)
                     .ThenInclude(d => d!.Manager)
-                .FirstOrDefaultAsync(b => b.Id == budgetId);
+                .FirstOrDefaultAsync(b => b.Id == budgetId, cancellationToken);
 
             if (budget?.Department?.Manager == null || budget.Department.ManagerId == null) return;
 
@@ -260,7 +261,7 @@ namespace Zentic.Infrastructure.Services
                 EntityType = nameof(BudgetAllocation),
                 EntityId = budgetId.ToString(),
                 ActionUrl = $"/Budget/Details/{budgetId}"
-            }, 0);
+            }, 0, cancellationToken);
         }
 
         private static NotificationDto MapToDto(Notification notification)

@@ -3,6 +3,7 @@ using Zentic.Application.Interfaces;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -15,7 +16,7 @@ namespace Zentic.Infrastructure.Services
             _db = db;
         }
 
-        public async Task<DashboardDto> GetDashboardAsync(int userId, string role)
+        public async Task<DashboardDto> GetDashboardAsync(int userId, string role, CancellationToken cancellationToken = default)
         {
             var now = DateTime.UtcNow;
             var isStaff = role == UserRole.Staff.ToString();
@@ -28,21 +29,21 @@ namespace Zentic.Infrastructure.Services
                 baseQuery = baseQuery.Where(r => r.RequesterId == userId);
 
             // Count queries — no ToList(), pure SQL aggregation
-            var totalRequisitions = await baseQuery.CountAsync();
+            var totalRequisitions = await baseQuery.CountAsync(cancellationToken);
             var pendingApproval = await baseQuery.CountAsync(r =>
-                r.Status == RequisitionStatus.Submitted || r.Status == RequisitionStatus.UnderReview);
+                r.Status == RequisitionStatus.Submitted || r.Status == RequisitionStatus.UnderReview, cancellationToken);
             var approvedThisMonth = await baseQuery.CountAsync(r =>
                 r.CreatedAt >= monthStart &&
-                (r.Status == RequisitionStatus.Approved || r.Status == RequisitionStatus.Paid));
+                (r.Status == RequisitionStatus.Approved || r.Status == RequisitionStatus.Paid), cancellationToken);
             var rejectedThisMonth = await baseQuery.CountAsync(r =>
-                r.CreatedAt >= monthStart && r.Status == RequisitionStatus.Rejected);
-            var flaggedForReview = await baseQuery.CountAsync(r => r.IsFlaggedForReview);
+                r.CreatedAt >= monthStart && r.Status == RequisitionStatus.Rejected, cancellationToken);
+            var flaggedForReview = await baseQuery.CountAsync(r => r.IsFlaggedForReview, cancellationToken);
             var totalAmountThisMonth = await baseQuery
                 .Where(r => r.CreatedAt >= monthStart)
-                .SumAsync(r => (decimal?)r.Amount) ?? 0m;
+                .SumAsync(r => (decimal?)r.Amount, cancellationToken) ?? 0m;
             var totalAmountApproved = await baseQuery
                 .Where(r => r.Status == RequisitionStatus.Approved || r.Status == RequisitionStatus.Paid)
-                .SumAsync(r => (decimal?)r.Amount) ?? 0m;
+                .SumAsync(r => (decimal?)r.Amount, cancellationToken) ?? 0m;
 
             // Recent 8 — minimal columns, no Include needed
             var recentRequisitions = await baseQuery
@@ -60,7 +61,7 @@ namespace Zentic.Infrastructure.Services
                     CreatedAt = r.CreatedAt,
                     RequesterName = r.Requester != null ? r.Requester.FullName : "Unknown"
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             // Category breakdown — aggregated in SQL
             var categoryBreakdown = await baseQuery
@@ -71,7 +72,7 @@ namespace Zentic.Infrastructure.Services
                     Count = g.Count(),
                     TotalAmount = g.Sum(r => r.Amount)
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return new DashboardDto
             {

@@ -3,6 +3,7 @@ using Zentic.Application.Interfaces;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -22,7 +23,7 @@ namespace Zentic.Infrastructure.Services
             _options = options.Value;
         }
 
-        public async Task<PriceCheckResult> CheckPriceAsync(int vendorId, decimal requestedAmount, string itemDescription)
+        public async Task<PriceCheckResult> CheckPriceAsync(int vendorId, decimal requestedAmount, string itemDescription, CancellationToken cancellationToken = default)
         {
             var history = await _db.PriceHistories
                 .Where(p => p.VendorId == vendorId
@@ -30,7 +31,7 @@ namespace Zentic.Infrastructure.Services
                     && p.Price > 0) // Exclude zero prices
                 .OrderByDescending(p => p.PurchaseDate)
                 .Take(_options.MaxHistoryRecords)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             if (history.Count < _options.MinHistoryCount)
             {
@@ -83,7 +84,7 @@ namespace Zentic.Infrastructure.Services
             };
         }
 
-        public async Task<bool> IsStructuringPatternAsync(int requesterId, int vendorId, decimal amount)
+        public async Task<bool> IsStructuringPatternAsync(int requesterId, int vendorId, decimal amount, CancellationToken cancellationToken = default)
         {
             // Structuring: multiple transactions just below approval threshold
             // to avoid triggering higher-level approval.
@@ -101,7 +102,7 @@ namespace Zentic.Infrastructure.Services
                     && r.Amount < _options.L2Threshold
                     && r.CreatedAt >= windowStart
                     && !r.IsDeleted)
-                .CountAsync();
+                .CountAsync(cancellationToken);
 
             if (recentCount < _options.StructuringMaxCount)
                 return false;
@@ -114,7 +115,7 @@ namespace Zentic.Infrastructure.Services
                     && !r.IsDeleted)
                 .OrderBy(r => r.CreatedAt)
                 .Select(r => new { r.Amount, r.CreatedAt })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             // Check if frequency is increasing (more requisitions in recent half of window)
             var midPoint = windowStart.AddDays(_options.StructuringWindowDays / 2.0);

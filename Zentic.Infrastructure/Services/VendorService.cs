@@ -4,6 +4,7 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Zentic.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
 namespace Zentic.Infrastructure.Services
 {
@@ -18,7 +19,7 @@ namespace Zentic.Infrastructure.Services
             _encryption = encryption;
         }
 
-        public async Task<List<VendorDto>> GetActiveVendorsAsync()
+        public async Task<List<VendorDto>> GetActiveVendorsAsync(CancellationToken cancellationToken = default)
         {
             var vendors = await _db.Vendors
                 .Where(v => v.Status == VendorStatus.Active && !v.IsDeleted)
@@ -41,12 +42,12 @@ namespace Zentic.Infrastructure.Services
                     VerifiedByName = null,
                     VerifiedAt = v.VerifiedAt
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return vendors;
         }
 
-        public async Task<List<VendorDto>> GetAllVendorsAsync()
+        public async Task<List<VendorDto>> GetAllVendorsAsync(CancellationToken cancellationToken = default)
         {
             var vendors = await _db.Vendors
                 .Include(v => v.VerifiedBy)
@@ -70,24 +71,24 @@ namespace Zentic.Infrastructure.Services
                     VerifiedByName = v.VerifiedBy != null ? v.VerifiedBy.FullName : null,
                     VerifiedAt = v.VerifiedAt
                 })
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             return vendors;
         }
 
-        public async Task<VendorDto?> GetByIdAsync(int id)
+        public async Task<VendorDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
         {
             var v = await _db.Vendors
                 .Include(v => v.VerifiedBy)
-                .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
+                .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
             if (v == null) return null;
 
             return MapToDto(v, v.VerifiedBy?.FullName, includeMaskedAccount: true);
         }
 
-        public async Task<VendorDto> CreateAsync(CreateVendorDto dto, int createdByUserId)
+        public async Task<VendorDto> CreateAsync(CreateVendorDto dto, int createdByUserId, CancellationToken cancellationToken = default)
         {
-            if (await _db.Vendors.AnyAsync(v => v.Code == dto.Code && !v.IsDeleted))
+            if (await _db.Vendors.AnyAsync(v => v.Code == dto.Code && !v.IsDeleted, cancellationToken))
                 throw new InvalidOperationException($"Vendor code '{dto.Code}' already exists.");
 
             var vendor = new Vendor
@@ -109,16 +110,16 @@ namespace Zentic.Infrastructure.Services
             };
 
             _db.Vendors.Add(vendor);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
             return MapToDto(vendor, includeMaskedAccount: true);
         }
 
-        public async Task<VendorDto> UpdateAsync(int id, CreateVendorDto dto, int updatedByUserId)
+        public async Task<VendorDto> UpdateAsync(int id, CreateVendorDto dto, int updatedByUserId, CancellationToken cancellationToken = default)
         {
-            var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.Id == id && !v.IsDeleted)
+            var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.Id == id && !v.IsDeleted, cancellationToken)
                 ?? throw new InvalidOperationException("Vendor not found.");
 
-            if (await _db.Vendors.AnyAsync(v => v.Code == dto.Code && v.Id != id && !v.IsDeleted))
+            if (await _db.Vendors.AnyAsync(v => v.Code == dto.Code && v.Id != id && !v.IsDeleted, cancellationToken))
                 throw new InvalidOperationException($"Vendor code '{dto.Code}' already in use.");
 
             vendor.Name = dto.Name;
@@ -134,13 +135,13 @@ namespace Zentic.Infrastructure.Services
                 vendor.BankAccountNumber = _encryption.Encrypt(dto.BankAccountNumber);
 
             vendor.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
             return MapToDto(vendor, includeMaskedAccount: true);
         }
 
-        public async Task VerifyAsync(int id, int verifiedByUserId)
+        public async Task VerifyAsync(int id, int verifiedByUserId, CancellationToken cancellationToken = default)
         {
-            var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.Id == id && !v.IsDeleted)
+            var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.Id == id && !v.IsDeleted, cancellationToken)
                 ?? throw new InvalidOperationException("Vendor not found.");
 
             if (vendor.Status != VendorStatus.PendingVerification)
@@ -150,12 +151,12 @@ namespace Zentic.Infrastructure.Services
             vendor.VerifiedById = verifiedByUserId;
             vendor.VerifiedAt = DateTime.UtcNow;
             vendor.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task SuspendAsync(int id, int suspendedByUserId)
+        public async Task SuspendAsync(int id, int suspendedByUserId, CancellationToken cancellationToken = default)
         {
-            var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.Id == id && !v.IsDeleted)
+            var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.Id == id && !v.IsDeleted, cancellationToken)
                 ?? throw new InvalidOperationException("Vendor not found.");
 
             if (vendor.Status == VendorStatus.Blacklisted)
@@ -165,7 +166,7 @@ namespace Zentic.Infrastructure.Services
                 ? VendorStatus.Active   // toggle: re-activate
                 : VendorStatus.Suspended;
             vendor.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(cancellationToken);
         }
 
         // ── helpers ──────────────────────────────────────────────────────────

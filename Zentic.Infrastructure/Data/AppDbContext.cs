@@ -2,6 +2,7 @@ using Zentic.Application.Interfaces;
 using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
 namespace Zentic.Infrastructure.Data
 {
@@ -479,32 +480,26 @@ namespace Zentic.Infrastructure.Data
         }
 
         // IUnitOfWork implementation
-        public async Task<int> SaveChangesAsync()
+        public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
         {
-            UpdateTimestamps();
-            return await base.SaveChangesAsync();
+            _currentTransaction = await Database.BeginTransactionAsync(cancellationToken);
         }
 
-        public async Task BeginTransactionAsync()
-        {
-            _currentTransaction = await Database.BeginTransactionAsync();
-        }
-
-        public async Task CommitAsync()
+        public async Task CommitAsync(CancellationToken cancellationToken = default)
         {
             if (_currentTransaction != null)
             {
-                await _currentTransaction.CommitAsync();
+                await _currentTransaction.CommitAsync(cancellationToken);
                 await _currentTransaction.DisposeAsync();
                 _currentTransaction = null;
             }
         }
 
-        public async Task RollbackAsync()
+        public async Task RollbackAsync(CancellationToken cancellationToken = default)
         {
             if (_currentTransaction != null)
             {
-                await _currentTransaction.RollbackAsync();
+                await _currentTransaction.RollbackAsync(cancellationToken);
                 await _currentTransaction.DisposeAsync();
                 _currentTransaction = null;
             }
