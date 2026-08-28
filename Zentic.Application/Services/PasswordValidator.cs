@@ -125,6 +125,7 @@ namespace Zentic.Application.Services
 
         private bool HasRepeatingChars(string password, int maxRepeating)
         {
+            if (maxRepeating < 1) return false;
             int count = 1;
             for (int i = 1; i < password.Length; i++)
             {
