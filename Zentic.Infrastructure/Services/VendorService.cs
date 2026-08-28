@@ -22,6 +22,7 @@ namespace Zentic.Infrastructure.Services
         public async Task<List<VendorDto>> GetActiveVendorsAsync(CancellationToken cancellationToken = default)
         {
             var vendors = await _db.Vendors
+                .AsNoTracking()
                 .Where(v => v.Status == VendorStatus.Active && !v.IsDeleted)
                 .OrderBy(v => v.Name)
                 .Select(v => new VendorDto
@@ -50,6 +51,7 @@ namespace Zentic.Infrastructure.Services
         public async Task<List<VendorDto>> GetAllVendorsAsync(CancellationToken cancellationToken = default)
         {
             var vendors = await _db.Vendors
+                .AsNoTracking()
                 .Include(v => v.VerifiedBy)
                 .Where(v => !v.IsDeleted)
                 .OrderBy(v => v.Name)

@@ -618,7 +618,7 @@ namespace Zentic.Infrastructure.Services
                     // Retry on concurrency conflict
                     await Task.Delay(Random.Shared.Next(50, 150), cancellationToken);
                 }
-                catch
+                catch (Exception)
                 {
                     await _unitOfWork.RollbackAsync(cancellationToken);
                     throw;

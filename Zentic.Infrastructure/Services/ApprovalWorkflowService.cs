@@ -77,7 +77,7 @@ namespace Zentic.Infrastructure.Services
 
                 return (await GetWorkflowByIdAsync(workflow.Id, cancellationToken))!;
             }
-            catch
+            catch (Exception)
             {
                 await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
@@ -104,6 +104,7 @@ namespace Zentic.Infrastructure.Services
         public async Task<List<ApprovalWorkflowDto>> GetActiveWorkflowsAsync(int? departmentId = null, ExpenseCategory? category = null, decimal? amount = null, CancellationToken cancellationToken = default)
         {
             var query = _db.ApprovalWorkflows
+                .AsNoTracking()
                 .Include(w => w.Department)
                 .Include(w => w.Steps)
                 .Where(w => w.IsActive && !w.IsDeleted);
@@ -179,7 +180,7 @@ namespace Zentic.Infrastructure.Services
 
                 return (await GetWorkflowByIdAsync(workflow.Id, cancellationToken))!;
             }
-            catch
+            catch (Exception)
             {
                 await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
@@ -206,7 +207,7 @@ namespace Zentic.Infrastructure.Services
 
                 return true;
             }
-            catch
+            catch (Exception)
             {
                 await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
@@ -246,7 +247,7 @@ namespace Zentic.Infrastructure.Services
 
                 return MapToDto(rule);
             }
-            catch
+            catch (Exception)
             {
                 await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
@@ -313,7 +314,7 @@ namespace Zentic.Infrastructure.Services
 
                 return MapToDto(delegation);
             }
-            catch
+            catch (Exception)
             {
                 await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
@@ -341,7 +342,7 @@ namespace Zentic.Infrastructure.Services
 
                 return true;
             }
-            catch
+            catch (Exception)
             {
                 await _unitOfWork.RollbackAsync(cancellationToken);
                 throw;
@@ -352,6 +353,7 @@ namespace Zentic.Infrastructure.Services
         {
             var now = DateTime.UtcNow;
             var delegations = await _db.ApprovalDelegations
+                .AsNoTracking()
                 .Include(d => d.Delegator)
                 .Include(d => d.Delegate)
                 .Include(d => d.Department)
@@ -369,6 +371,7 @@ namespace Zentic.Infrastructure.Services
         {
             var now = DateTime.UtcNow;
             var delegations = await _db.ApprovalDelegations
+                .AsNoTracking()
                 .Include(d => d.Delegator)
                 .Include(d => d.Delegate)
                 .Include(d => d.Department)
@@ -627,6 +630,7 @@ namespace Zentic.Infrastructure.Services
         public async Task<List<EscalationRuleDto>> GetActiveEscalationRulesAsync(CancellationToken cancellationToken = default)
         {
             var rules = await _db.EscalationRules
+                .AsNoTracking()
                 .Include(e => e.EscalateToUser)
                 .Include(e => e.Department)
                 .Where(e => e.IsActive && !e.IsDeleted)

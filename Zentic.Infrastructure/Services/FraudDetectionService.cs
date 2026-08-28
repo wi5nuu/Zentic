@@ -26,6 +26,7 @@ namespace Zentic.Infrastructure.Services
         public async Task<PriceCheckResult> CheckPriceAsync(int vendorId, decimal requestedAmount, string itemDescription, CancellationToken cancellationToken = default)
         {
             var history = await _db.PriceHistories
+                .AsNoTracking()
                 .Where(p => p.VendorId == vendorId
                     && p.ItemDescription == itemDescription
                     && p.Price > 0) // Exclude zero prices
@@ -96,6 +97,7 @@ namespace Zentic.Infrastructure.Services
 
             // Count recent requisitions near threshold
             var recentCount = await _db.ExpenseRequisitions
+                .AsNoTracking()
                 .Where(r => r.RequesterId == requesterId
                     && r.VendorId == vendorId
                     && r.Amount >= _options.L2Threshold * _options.StructuringThresholdRatio
@@ -109,6 +111,7 @@ namespace Zentic.Infrastructure.Services
 
             // Additional check: look for pattern of increasing frequency
             var recentRequisitions = await _db.ExpenseRequisitions
+                .AsNoTracking()
                 .Where(r => r.RequesterId == requesterId
                     && r.VendorId == vendorId
                     && r.CreatedAt >= windowStart

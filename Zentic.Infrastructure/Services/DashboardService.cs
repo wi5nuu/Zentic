@@ -24,6 +24,7 @@ namespace Zentic.Infrastructure.Services
             var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
             var baseQuery = _db.ExpenseRequisitions
+                .AsNoTracking()
                 .Where(r => !r.IsDeleted);
 
             if (isStaff)

@@ -9,7 +9,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OtpNet;
 using QRCoder;
-using System.Drawing;
 using System.Security.Cryptography;
 using System.Threading;
 
