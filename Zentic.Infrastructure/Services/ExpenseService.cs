@@ -459,6 +459,7 @@ namespace Zentic.Infrastructure.Services
                 q => q.RequisitionId == dto.RequisitionId && q.VendorId == dto.VendorId && !q.IsDeleted, cancellationToken);
             if (duplicate) throw new InvalidOperationException("A quotation for this vendor already exists.");
 
+            var now = DateTime.UtcNow;
             var quotation = new RequisitionQuotation
             {
                 RequisitionId = dto.RequisitionId,
@@ -466,8 +467,8 @@ namespace Zentic.Infrastructure.Services
                 QuotedPrice = dto.QuotedPrice,
                 QuotationDate = dto.QuotationDate == default ? DateTime.Today : dto.QuotationDate,
                 IsSelected = false,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = now,
+                UpdatedAt = now
             };
             _db.RequisitionQuotations.Add(quotation);
             await _db.SaveChangesAsync(cancellationToken);

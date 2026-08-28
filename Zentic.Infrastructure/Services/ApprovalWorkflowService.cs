@@ -405,23 +405,24 @@ namespace Zentic.Infrastructure.Services
                 return new ApprovalResultDto { Success = false, Message = "You are not authorized to approve this requisition at this stage." };
 
             var oldStatus = requisition.Status;
+            var now = DateTime.UtcNow;
 
             if (action == ApprovalAction.Approve)
             {
                 requisition.Status = RequisitionStatus.Approved;
                 requisition.ApproverId = approverId;
-                requisition.ApprovedAt = DateTime.UtcNow;
+                requisition.ApprovedAt = now;
                 requisition.ApprovalNotes = notes;
             }
             else
             {
                 requisition.Status = RequisitionStatus.Rejected;
                 requisition.ApproverId = approverId;
-                requisition.RejectedAt = DateTime.UtcNow;
+                requisition.RejectedAt = now;
                 requisition.RejectionReason = notes;
             }
 
-            requisition.UpdatedAt = DateTime.UtcNow;
+            requisition.UpdatedAt = now;
 
             await _db.SaveChangesAsync(cancellationToken);
 
