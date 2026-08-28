@@ -89,7 +89,8 @@ namespace Zentic.Infrastructure.Services
 
         public async Task<VendorDto> CreateAsync(CreateVendorDto dto, int createdByUserId, CancellationToken cancellationToken = default)
         {
-            if (await _db.Vendors.AnyAsync(v => v.Code == dto.Code && !v.IsDeleted, cancellationToken))
+            var codeUpper = dto.Code.ToUpper();
+            if (await _db.Vendors.AnyAsync(v => v.Code == codeUpper && !v.IsDeleted, cancellationToken))
                 throw new InvalidOperationException($"Vendor code '{dto.Code}' already exists.");
 
             var now = DateTime.UtcNow;
@@ -121,7 +122,8 @@ namespace Zentic.Infrastructure.Services
             var vendor = await _db.Vendors.FirstOrDefaultAsync(v => v.Id == id && !v.IsDeleted, cancellationToken)
                 ?? throw new InvalidOperationException("Vendor not found.");
 
-            if (await _db.Vendors.AnyAsync(v => v.Code == dto.Code && v.Id != id && !v.IsDeleted, cancellationToken))
+            var codeUpper = dto.Code.ToUpper();
+            if (await _db.Vendors.AnyAsync(v => v.Code == codeUpper && v.Id != id && !v.IsDeleted, cancellationToken))
                 throw new InvalidOperationException($"Vendor code '{dto.Code}' already in use.");
 
             vendor.Name = dto.Name;
