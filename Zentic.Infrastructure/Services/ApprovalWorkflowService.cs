@@ -224,6 +224,19 @@ namespace Zentic.Infrastructure.Services
             await _unitOfWork.BeginTransactionAsync(cancellationToken);
             try
             {
+                if (dto.EscalateToUserId == null && dto.EscalateToRole == null)
+                    throw new InvalidOperationException("Specify an escalation target user or role.");
+
+                if (dto.EscalateToUserId.HasValue)
+                {
+                    var user = await _db.Users.FindAsync(new object[] { dto.EscalateToUserId.Value }, cancellationToken);
+                    if (user == null || !user.IsActive)
+                        throw new InvalidOperationException("Escalation target user not found or inactive.");
+                }
+
+                if (dto.EscalateToRole.HasValue && !Enum.IsDefined(typeof(UserRole), dto.EscalateToRole.Value))
+                    throw new InvalidOperationException("Invalid escalation target role.");
+
                 var now = DateTime.UtcNow;
                 var rule = new EscalationRule
                 {
