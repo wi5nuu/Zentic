@@ -14,7 +14,8 @@ namespace Zentic.Domain.ValueObjects
             if (amount < 0)
                 throw new ArgumentException("Amount cannot be negative", nameof(amount));
 
-            Amount = amount;
+            // Normalize to currency minor unit (2 decimal places to match decimal(18,2))
+            Amount = decimal.Round(amount, 2, MidpointRounding.AwayFromZero);
             Currency = currency;
         }
 
