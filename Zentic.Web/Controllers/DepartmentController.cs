@@ -3,6 +3,7 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Zentic.Web.Controllers
 {
@@ -31,10 +32,9 @@ namespace Zentic.Web.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([Bind("Name,Code,Description")] Department model)
         {
-            var all = await _deptRepo.GetAllAsync();
-            if (all.Any(d => d.Code == model.Code))
+            if (await _deptRepo.Query().AnyAsync(d => d.Code.ToLower() == model.Code.ToLower()))
                 ModelState.AddModelError("Code", "Department code already in use.");
-            if (all.Any(d => d.Name == model.Name))
+            if (await _deptRepo.Query().AnyAsync(d => d.Name.ToLower() == model.Name.ToLower()))
                 ModelState.AddModelError("Name", "Department name already in use.");
 
             if (!ModelState.IsValid) return View(model);
@@ -63,10 +63,9 @@ namespace Zentic.Web.Controllers
             var dept = await _deptRepo.GetByIdAsync(id);
             if (dept == null) return NotFound();
 
-            var all = await _deptRepo.GetAllAsync();
-            if (all.Any(d => d.Code == model.Code && d.Id != id))
+            if (await _deptRepo.Query().AnyAsync(d => d.Code.ToLower() == model.Code.ToLower() && d.Id != id))
                 ModelState.AddModelError("Code", "Department code already in use.");
-            if (all.Any(d => d.Name == model.Name && d.Id != id))
+            if (await _deptRepo.Query().AnyAsync(d => d.Name.ToLower() == model.Name.ToLower() && d.Id != id))
                 ModelState.AddModelError("Name", "Department name already in use.");
 
             if (!ModelState.IsValid) return View(model);
