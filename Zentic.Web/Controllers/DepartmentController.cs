@@ -3,7 +3,6 @@ using Zentic.Domain.Entities;
 using Zentic.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace Zentic.Web.Controllers
 {
@@ -11,18 +10,14 @@ namespace Zentic.Web.Controllers
     public class DepartmentController : BaseController
     {
         private readonly IRepository<Department> _deptRepo;
-        private readonly IAuditService _auditService;
-        private readonly IDashboardService _dashboardService;
 
         public DepartmentController(
             IRepository<Department> deptRepo,
             IAuditService auditService,
             IDashboardService dashboardService)
-            : base(dashboardService)
+            : base(dashboardService, auditService)
         {
             _deptRepo = deptRepo;
-            _auditService = auditService;
-            _dashboardService = dashboardService;
         }
 
         public async Task<IActionResult> Index()
@@ -49,7 +44,7 @@ namespace Zentic.Web.Controllers
             model.UpdatedAt = DateTime.UtcNow;
 
             var created = await _deptRepo.AddAsync(model);
-            await LogAudit(AuditEventType.Create, "Department", created.Id.ToString(), $"Created department {created.Name}");
+            await LogAuditAsync(AuditEventType.Create, "Department", created.Id.ToString(), $"Created department {created.Name}");
 
             TempData["Success"] = $"Department {created.Name} created.";
             return RedirectToAction(nameof(Index));
@@ -82,7 +77,7 @@ namespace Zentic.Web.Controllers
             dept.IsActive = model.IsActive;
 
             await _deptRepo.UpdateAsync(dept);
-            await LogAudit(AuditEventType.Update, "Department", id.ToString(), $"Updated department {dept.Name}");
+            await LogAuditAsync(AuditEventType.Update, "Department", id.ToString(), $"Updated department {dept.Name}");
 
             TempData["Success"] = $"Department {dept.Name} updated.";
             return RedirectToAction(nameof(Index));
@@ -95,19 +90,10 @@ namespace Zentic.Web.Controllers
             if (dept == null) return NotFound();
 
             await _deptRepo.SoftDeleteAsync(id);
-            await LogAudit(AuditEventType.Delete, "Department", id.ToString(), $"Deleted department {dept.Name}");
+            await LogAuditAsync(AuditEventType.Delete, "Department", id.ToString(), $"Deleted department {dept.Name}");
 
             TempData["Success"] = $"Department {dept.Name} deleted.";
             return RedirectToAction(nameof(Index));
-        }
-
-        private async Task LogAudit(AuditEventType eventType, string entity, string entityId, string notes)
-        {
-            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-            {
-                var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
-                await _auditService.LogAsync(eventType, entity, entityId, userId, ip, null, null, notes);
-            }
         }
     }
 }

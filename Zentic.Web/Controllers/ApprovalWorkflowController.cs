@@ -5,7 +5,6 @@ using Zentic.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using System.Security.Claims;
 
 namespace Zentic.Web.Controllers
 {
@@ -15,7 +14,6 @@ namespace Zentic.Web.Controllers
         private readonly IApprovalWorkflowService _workflowService;
         private readonly IRepository<AppUser> _userRepo;
         private readonly IRepository<Department> _deptRepo;
-        private readonly IDashboardService _dashboardService;
 
         public ApprovalWorkflowController(
             IApprovalWorkflowService workflowService,
@@ -27,7 +25,6 @@ namespace Zentic.Web.Controllers
             _workflowService = workflowService;
             _userRepo = userRepo;
             _deptRepo = deptRepo;
-            _dashboardService = dashboardService;
         }
 
         public async Task<IActionResult> Index()
@@ -65,7 +62,7 @@ namespace Zentic.Web.Controllers
                 return View(dto);
             }
 
-            var userId = CurrentUserId();
+            var userId = GetCurrentUserId();
             var created = await _workflowService.CreateWorkflowAsync(dto, userId);
 
             TempData["Success"] = $"Workflow '{created.Name}' created.";
@@ -121,7 +118,7 @@ namespace Zentic.Web.Controllers
                 return View(dto);
             }
 
-            var userId = CurrentUserId();
+            var userId = GetCurrentUserId();
             var updated = await _workflowService.UpdateWorkflowAsync(id, dto, userId);
 
             TempData["Success"] = $"Workflow '{updated.Name}' updated.";
@@ -131,8 +128,7 @@ namespace Zentic.Web.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete(int id)
         {
-            var userId = CurrentUserId();
-            var deleted = await _workflowService.DeleteWorkflowAsync(id, userId);
+            var deleted = await _workflowService.DeleteWorkflowAsync(id, GetCurrentUserId());
 
             TempData[deleted ? "Success" : "Error"] = deleted ? "Workflow deleted." : "Workflow not found.";
             return RedirectToAction(nameof(Index));
@@ -164,8 +160,7 @@ namespace Zentic.Web.Controllers
                 return View(dto);
             }
 
-            var userId = CurrentUserId();
-            var created = await _workflowService.CreateEscalationRuleAsync(dto, userId);
+            var created = await _workflowService.CreateEscalationRuleAsync(dto, GetCurrentUserId());
 
             TempData["Success"] = $"Escalation rule '{created.Name}' created.";
             return RedirectToAction(nameof(EscalationRules));
@@ -210,8 +205,5 @@ namespace Zentic.Web.Controllers
                 .Select(r => new SelectListItem(r.Name, r.Id.ToString()))
                 .ToList();
         }
-
-        private int CurrentUserId() =>
-            int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     }
 }

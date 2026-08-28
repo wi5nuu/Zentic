@@ -3,7 +3,6 @@ using Zentic.Application.Interfaces;
 using Zentic.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace Zentic.Web.Controllers
 {
@@ -11,15 +10,11 @@ namespace Zentic.Web.Controllers
     public class VendorController : BaseController
     {
         private readonly IVendorService _vendorService;
-        private readonly IAuditService _auditService;
-        private readonly IDashboardService _dashboardService;
 
         public VendorController(IVendorService vendorService, IAuditService auditService, IDashboardService dashboardService)
-            : base(dashboardService)
+            : base(dashboardService, auditService)
         {
             _vendorService = vendorService;
-            _auditService = auditService;
-            _dashboardService = dashboardService;
         }
 
         public async Task<IActionResult> Index()
@@ -33,7 +28,7 @@ namespace Zentic.Web.Controllers
             var vendor = await _vendorService.GetByIdAsync(id);
             if (vendor == null) return NotFound();
 
-            await LogAudit(AuditEventType.View, "Vendor", id.ToString(), "Viewed vendor details");
+            await LogAuditAsync(AuditEventType.View, "Vendor", id.ToString(), "Viewed vendor details");
             return View(vendor);
         }
 
@@ -47,7 +42,7 @@ namespace Zentic.Web.Controllers
             {
                 var userId = GetCurrentUserId();
                 var vendor = await _vendorService.CreateAsync(dto, userId);
-                await LogAudit(AuditEventType.Create, "Vendor", vendor.Id.ToString(), $"Created vendor {vendor.Name}");
+                await LogAuditAsync(AuditEventType.Create, "Vendor", vendor.Id.ToString(), $"Created vendor {vendor.Name}");
                 TempData["Success"] = $"Vendor {vendor.Name} created and pending verification.";
                 return RedirectToAction(nameof(Index));
             }
@@ -73,7 +68,6 @@ namespace Zentic.Web.Controllers
                 TaxId = vendor.TaxId,
                 BankName = vendor.BankName,
                 BankAccountHolderName = vendor.BankAccountHolderName
-                // BankAccountNumber intentionally blank — only update if user enters new value
             });
         }
 
@@ -85,7 +79,7 @@ namespace Zentic.Web.Controllers
             {
                 var userId = GetCurrentUserId();
                 var vendor = await _vendorService.UpdateAsync(id, dto, userId);
-                await LogAudit(AuditEventType.Update, "Vendor", id.ToString(), $"Updated vendor {vendor.Name}");
+                await LogAuditAsync(AuditEventType.Update, "Vendor", id.ToString(), $"Updated vendor {vendor.Name}");
                 TempData["Success"] = $"Vendor {vendor.Name} updated.";
                 return RedirectToAction(nameof(Details), new { id });
             }
@@ -97,14 +91,13 @@ namespace Zentic.Web.Controllers
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        [Authorize(Roles = "Admin,Finance")]
         public async Task<IActionResult> Verify(int id)
         {
             try
             {
                 var userId = GetCurrentUserId();
                 await _vendorService.VerifyAsync(id, userId);
-                await LogAudit(AuditEventType.Approve, "Vendor", id.ToString(), "Vendor verified and set to Active");
+                await LogAuditAsync(AuditEventType.Approve, "Vendor", id.ToString(), "Vendor verified and set to Active");
                 TempData["Success"] = "Vendor verified and activated.";
             }
             catch (InvalidOperationException ex)
@@ -115,14 +108,13 @@ namespace Zentic.Web.Controllers
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        [Authorize(Roles = "Admin,Finance")]
         public async Task<IActionResult> Suspend(int id)
         {
             try
             {
                 var userId = GetCurrentUserId();
                 await _vendorService.SuspendAsync(id, userId);
-                await LogAudit(AuditEventType.Update, "Vendor", id.ToString(), "Vendor suspended/unsuspended");
+                await LogAuditAsync(AuditEventType.Update, "Vendor", id.ToString(), "Vendor suspended/unsuspended");
                 TempData["Success"] = "Vendor status updated.";
             }
             catch (InvalidOperationException ex)
@@ -130,22 +122,6 @@ namespace Zentic.Web.Controllers
                 TempData["Error"] = ex.Message;
             }
             return RedirectToAction(nameof(Details), new { id });
-        }
-
-        private int GetCurrentUserId()
-        {
-            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id))
-                return id;
-            throw new InvalidOperationException("User not authenticated.");
-        }
-
-        private async Task LogAudit(AuditEventType eventType, string entity, string entityId, string notes)
-        {
-            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-            {
-                var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
-                await _auditService.LogAsync(eventType, entity, entityId, userId, ip, null, null, notes);
-            }
         }
     }
 }

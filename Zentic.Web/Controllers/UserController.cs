@@ -4,7 +4,6 @@ using Zentic.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using System.Security.Claims;
 
 namespace Zentic.Web.Controllers
 {
@@ -13,20 +12,16 @@ namespace Zentic.Web.Controllers
     {
         private readonly IRepository<AppUser> _userRepo;
         private readonly IRepository<Department> _deptRepo;
-        private readonly IAuditService _auditService;
-        private readonly IDashboardService _dashboardService;
 
         public UserController(
             IRepository<AppUser> userRepo,
             IRepository<Department> deptRepo,
             IAuditService auditService,
             IDashboardService dashboardService)
-            : base(dashboardService)
+            : base(dashboardService, auditService)
         {
             _userRepo = userRepo;
             _deptRepo = deptRepo;
-            _auditService = auditService;
-            _dashboardService = dashboardService;
         }
 
         public async Task<IActionResult> Index()
@@ -49,7 +44,6 @@ namespace Zentic.Web.Controllers
             if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
                 ModelState.AddModelError("password", "Password must be at least 8 characters.");
 
-            // Check unique email / employee ID
             var all = await _userRepo.GetAllAsync();
             if (all.Any(u => u.Email == model.Email))
                 ModelState.AddModelError("Email", "Email already in use.");
@@ -70,7 +64,7 @@ namespace Zentic.Web.Controllers
             model.UpdatedAt = DateTime.UtcNow;
 
             var created = await _userRepo.AddAsync(model);
-            await LogAudit(AuditEventType.Create, "AppUser", created.Id.ToString(), $"Created user {created.Email}");
+            await LogAuditAsync(AuditEventType.Create, "AppUser", created.Id.ToString(), $"Created user {created.Email}");
 
             TempData["Success"] = $"User {created.FullName} created successfully.";
             return RedirectToAction(nameof(Index));
@@ -129,7 +123,7 @@ namespace Zentic.Web.Controllers
             }
 
             await _userRepo.UpdateAsync(user);
-            await LogAudit(AuditEventType.Update, "AppUser", id.ToString(), $"Updated user {user.Email}");
+            await LogAuditAsync(AuditEventType.Update, "AppUser", id.ToString(), $"Updated user {user.Email}");
 
             TempData["Success"] = $"User {user.FullName} updated.";
             return RedirectToAction(nameof(Index));
@@ -141,8 +135,7 @@ namespace Zentic.Web.Controllers
             var user = await _userRepo.GetByIdAsync(id);
             if (user == null) return NotFound();
 
-            // Prevent admin from deactivating themselves
-            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var currentUserId) && currentUserId == id)
+            if (GetCurrentUserId() == id)
             {
                 TempData["Error"] = "You cannot deactivate your own account.";
                 return RedirectToAction(nameof(Index));
@@ -150,7 +143,7 @@ namespace Zentic.Web.Controllers
 
             user.IsActive = !user.IsActive;
             await _userRepo.UpdateAsync(user);
-            await LogAudit(AuditEventType.Update, "AppUser", id.ToString(),
+            await LogAuditAsync(AuditEventType.Update, "AppUser", id.ToString(),
                 $"User {user.Email} {(user.IsActive ? "activated" : "deactivated")}");
 
             TempData["Success"] = $"User {user.FullName} {(user.IsActive ? "activated" : "deactivated")}.";
@@ -163,14 +156,14 @@ namespace Zentic.Web.Controllers
             var user = await _userRepo.GetByIdAsync(id);
             if (user == null) return NotFound();
 
-            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var currentUserId) && currentUserId == id)
+            if (GetCurrentUserId() == id)
             {
                 TempData["Error"] = "You cannot delete your own account.";
                 return RedirectToAction(nameof(Index));
             }
 
             await _userRepo.SoftDeleteAsync(id);
-            await LogAudit(AuditEventType.Delete, "AppUser", id.ToString(), $"Deleted user {user.Email}");
+            await LogAuditAsync(AuditEventType.Delete, "AppUser", id.ToString(), $"Deleted user {user.Email}");
 
             TempData["Success"] = $"User {user.FullName} deleted.";
             return RedirectToAction(nameof(Index));
@@ -182,15 +175,6 @@ namespace Zentic.Web.Controllers
             ViewBag.Departments = depts
                 .Where(d => d.IsActive)
                 .Select(d => new SelectListItem(d.Name, d.Id.ToString(), d.Id == selectedId));
-        }
-
-        private async Task LogAudit(AuditEventType eventType, string entity, string entityId, string notes)
-        {
-            if (int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-            {
-                var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
-                await _auditService.LogAsync(eventType, entity, entityId, userId, ip, null, null, notes);
-            }
         }
     }
 }

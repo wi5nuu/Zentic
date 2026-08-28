@@ -302,7 +302,10 @@ namespace Zentic.Web.Controllers
         private static string Csv(string? value)
         {
             if (string.IsNullOrEmpty(value)) return "\"\"";
-            return "\"" + value.Replace("\"", "\"\"") + "\"";
+            var sanitized = value.Replace("\"", "\"\"");
+            if (sanitized.Length > 0 && sanitized[0] is '=' or '+' or '-' or '@' or '\t' or '\r' or '\n')
+                sanitized = "'" + sanitized;
+            return "\"" + sanitized + "\"";
         }
 
         private async Task PopulateDropdowns()

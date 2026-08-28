@@ -20,13 +20,7 @@ namespace Zentic.Web.Controllers
 
         public async Task<IActionResult> Index()
         {
-            if (!int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-                return RedirectToAction("Login", "Auth");
-
-            // BaseController.OnActionExecutionAsync already called GetDashboardAsync once to
-            // populate ViewBag.PendingCount / ViewBag.FlaggedCount for the sidebar.
-            // We need the full DashboardDto for the view model, so we call it once here.
-            // A single call per request is acceptable; caching can be added later if needed.
+            var userId = GetCurrentUserId();
             var role = User.FindFirstValue(ClaimTypes.Role) ?? "Staff";
             var dashboard = await _dashboardService.GetDashboardAsync(userId, role);
             return View(dashboard);
