@@ -104,7 +104,7 @@ namespace Zentic.Infrastructure.Services
                 TaxId = dto.TaxId,
                 BankName = dto.BankName,
                 BankAccountHolderName = dto.BankAccountHolderName,
-                BankAccountNumber = dto.BankAccountNumber != null
+                BankAccountNumber = !string.IsNullOrWhiteSpace(dto.BankAccountNumber)
                     ? _encryption.Encrypt(dto.BankAccountNumber)
                     : null,
                 Status = VendorStatus.PendingVerification,
