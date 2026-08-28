@@ -143,6 +143,7 @@ namespace Zentic.Application.Services
 
         private bool HasSequentialChars(string password, int maxSequential)
         {
+            if (maxSequential < 2) return false;
             for (int i = 0; i <= password.Length - maxSequential; i++)
             {
                 // Check ascending sequence (e.g., abc, 123)
