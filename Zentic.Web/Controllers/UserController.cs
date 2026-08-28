@@ -4,6 +4,7 @@ using Zentic.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
 
 namespace Zentic.Web.Controllers
 {
@@ -44,10 +45,9 @@ namespace Zentic.Web.Controllers
             if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
                 ModelState.AddModelError("password", "Password must be at least 8 characters.");
 
-            var all = await _userRepo.GetAllAsync();
-            if (all.Any(u => u.Email == model.Email))
+            if (await _userRepo.Query().AnyAsync(u => u.Email.ToLower() == model.Email.ToLower()))
                 ModelState.AddModelError("Email", "Email already in use.");
-            if (all.Any(u => u.EmployeeId == model.EmployeeId))
+            if (await _userRepo.Query().AnyAsync(u => u.EmployeeId == model.EmployeeId))
                 ModelState.AddModelError("EmployeeId", "Employee ID already in use.");
 
             if (!ModelState.IsValid)
@@ -87,10 +87,9 @@ namespace Zentic.Web.Controllers
             var user = await _userRepo.GetByIdAsync(id);
             if (user == null) return NotFound();
 
-            var all = await _userRepo.GetAllAsync();
-            if (all.Any(u => u.Email == model.Email && u.Id != id))
+            if (await _userRepo.Query().AnyAsync(u => u.Email.ToLower() == model.Email.ToLower() && u.Id != id))
                 ModelState.AddModelError("Email", "Email already in use.");
-            if (all.Any(u => u.EmployeeId == model.EmployeeId && u.Id != id))
+            if (await _userRepo.Query().AnyAsync(u => u.EmployeeId == model.EmployeeId && u.Id != id))
                 ModelState.AddModelError("EmployeeId", "Employee ID already in use.");
 
             if (!ModelState.IsValid)
