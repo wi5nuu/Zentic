@@ -2,7 +2,6 @@ using Zentic.Application.DTOs;
 using Zentic.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace Zentic.Web.Controllers
 {
@@ -10,13 +9,11 @@ namespace Zentic.Web.Controllers
     public class AuditLogController : BaseController
     {
         private readonly IAuditService _auditService;
-        private readonly IDashboardService _dashboardService;
 
         public AuditLogController(IAuditService auditService, IDashboardService dashboardService)
             : base(dashboardService)
         {
             _auditService = auditService;
-            _dashboardService = dashboardService;
         }
 
         public async Task<IActionResult> Index(string? entityName, int? userId, 

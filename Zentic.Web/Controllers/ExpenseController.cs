@@ -14,15 +14,13 @@ namespace Zentic.Web.Controllers
         private readonly IExpenseService _expenseService;
         private readonly IVendorService _vendorService;
         private readonly IAuditService _auditService;
-        private readonly IDashboardService _dashboardService;
 
         public ExpenseController(IExpenseService expenseService, IVendorService vendorService, IAuditService auditService, IDashboardService dashboardService) 
-            : base(dashboardService)
+            : base(dashboardService, auditService)
         {
             _expenseService = expenseService;
             _vendorService = vendorService;
             _auditService = auditService;
-            _dashboardService = dashboardService;
         }
 
         public async Task<IActionResult> Index(string? status, string? search, string? category, bool? flagged, int page = 1)

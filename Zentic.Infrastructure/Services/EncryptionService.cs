@@ -94,9 +94,9 @@ namespace Zentic.Infrastructure.Services
             {
                 throw;
             }
-            catch
+            catch (Exception ex)
             {
-                throw new CryptographicException("Failed to decrypt data. Data may be corrupted or encrypted with unknown key.");
+                throw new CryptographicException("Failed to decrypt data. Data may be corrupted or encrypted with unknown key.", ex);
             }
         }
 

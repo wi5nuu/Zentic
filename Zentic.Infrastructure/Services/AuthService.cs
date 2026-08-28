@@ -174,7 +174,7 @@ namespace Zentic.Infrastructure.Services
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to write audit log for login of user {UserId}", user.Id);
+                _logger.LogError(ex, "Failed to write audit log for login of user {UserId}", user.Id);
             }
 
             return new AuthResultDto
